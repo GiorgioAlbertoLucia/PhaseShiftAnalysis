@@ -167,7 +167,8 @@ class DoubleGausPotential: public Potential {
 
         double eval(const double r) const override {
             //return - mV0A * std::exp(- r*r / (2*mSigmaA*mSigmaA)) - mV0B * std::exp(- r*r / (2*mSigmaB*mSigmaB));
-            return - mV0A * std::exp(- r*r / (mSigmaA*mSigmaA)) - mV0B * std::exp(- r*r / (mSigmaB*mSigmaB));
+            //return - mV0A * std::exp(- r*r / (mSigmaA*mSigmaA)) - mV0B * std::exp(- r*r / (mSigmaB*mSigmaB));
+            return mV0A * std::exp(- r*r / (mSigmaA*mSigmaA)) + mV0B * std::exp(- r*r / (mSigmaB*mSigmaB));
         }
 
         double getParameter(const int iparam) const override {

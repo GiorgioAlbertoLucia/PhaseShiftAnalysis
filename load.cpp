@@ -22,8 +22,9 @@ void load() {
     gSystem->AddLinkedLibs("-L/opt/homebrew/Cellar/gsl/2.8/lib/ -lgsl -lgslcblas");
     gSystem->AddDynamicPath("/opt/homebrew/Cellar/gsl/2.8/lib/");
     
-    //gROOT->ProcessLine(".L PotentialFromPhaseShiftsDimitar.cpp+");
-    gROOT->ProcessLine(".L PlotExpectedWavefunctions.cpp+");
+    gROOT->ProcessLine(".L PotentialFromPhaseShiftsDimitar.cpp+");
+    //gROOT->ProcessLine(".L PlotExpectedWavefunctions.cpp+");
+    //gROOT->ProcessLine(".L PotentialFromPhaseShiftsPratt.cpp+");
 
     /*
     gDebug = 3;

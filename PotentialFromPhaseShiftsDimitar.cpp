@@ -83,7 +83,6 @@ double findOptimalMatchingRadius(const std::vector<double>& u_num,
     return 20.0;  // Default fallback
 }
 
-// Chi-squared function for TMinuit
 void chi2Function(Int_t& /*npar*/, Double_t* /*gin*/, Double_t& f, Double_t* par, Int_t /*iflag*/) {
 
     g_potential->setParameters(par);
@@ -103,7 +102,6 @@ void chi2Function(Int_t& /*npar*/, Double_t* /*gin*/, Double_t& f, Double_t* par
         const double kstar = getKstar(incidentMomentum);
         const double k = waveNumber(kstar);
         const double dr_asymptotic = 0.1 / k;
-        //const double relativeVelocity = 2 * kstar / (constant::M_PROTON+constant::M_HE3);
         const double relativeVelocity = kstar / mu; // to be checked
         const double eta = constant::ALPHA_EM * constant::Z_PROTON * constant::Z_HE3 / relativeVelocity;
 
@@ -111,8 +109,6 @@ void chi2Function(Int_t& /*npar*/, Double_t* /*gin*/, Double_t& f, Double_t* par
         
         const double r_asymptotic_stable = findOptimalMatchingRadius(numerical_solution, k, dr);
         const double calc_phase = extractor.extractPhaseShift(numerical_solution, r_asymptotic_stable, dr_asymptotic, k, eta);
-        //const double calc_phase = extractor.extractPhaseShift(numerical_solution, r_asymptotic, dr_asymptotic, k, eta);
-        //double calc_phase = solver.solveAndExtractPhase(g_data.l_value, k, *g_potential, constant::Z_PROTON, constant::Z_HE3);
         double diff = calc_phase - g_data.exp_phases[i];
         
         while (diff > TMath::Pi() / 2.) diff -= TMath::Pi();
@@ -253,11 +249,6 @@ void drawPhaseShiftComparison(const Potential& pot, double chi2, int ndf, TFile*
     gPad->SetLeftMargin(0.12);
     gPad->SetRightMargin(0.05);
     
-    // Calculate fitted phase shifts
-    //double mu = reducedMass(constant::M_PROTON, constant::M_HE3);
-    //NumerovSolver solver(0.0005, 30.0, 28.0, 1.0);
-
-    //double chi2 = 0.0;
     const double mu = reducedMass(constant::M_PROTON, constant::M_HE3);
     const double dr = 0.0001;
     const double r_asymptotic = 15.0; // 28.0
@@ -274,22 +265,12 @@ void drawPhaseShiftComparison(const Potential& pot, double chi2, int ndf, TFile*
         const double kstar = getKstar(incidentMomentum);
         const double k = waveNumber(kstar);
         const double dr_asymptotic = 0.1 / k;
-        //const double relativeVelocity = 2 * kstar / (constant::M_PROTON+constant::M_HE3);
-        const double relativeVelocity = kstar / mu; // to be checked
+        const double relativeVelocity = kstar / mu;
         const double eta = constant::ALPHA_EM * constant::Z_PROTON * constant::Z_HE3 / relativeVelocity;
 
         numerical_solution = solver.solveEquation(g_data.l_value, k, *g_potential, constant::Z_PROTON, constant::Z_HE3);
         const double calc_phase = extractor.extractPhaseShift(numerical_solution, r_asymptotic, dr_asymptotic, k, eta);
-        //double calc_phase = solver.solveAndExtractPhase(g_data.l_value, k, *g_potential, constant::Z_PROTON, constant::Z_HE3);
-
-        //const double v = TMath::Sqrt(2. * g_data.energies[i] / constant::M_PROTON); // incident proton beam velocity
-        //const double incidentMomentum = v * constant::M_PROTON;
-        //const double kstar = getKstar(incidentMomentum);
-        //double k = waveNumber(kstar);
-        //double calc_phase = solver.solveAndExtractPhase(g_data.l_value, k, 
-        //                                                pot, constant::Z_PROTON, constant::Z_HE3);
         
-        //std::cout << "calc_phase (rad)" << calc_phase << ", ";
         fitted_phases.push_back(calc_phase * 180.0 / TMath::Pi()); // Convert to degrees
         std::cout << fitted_phases[i] << ", ";
     }

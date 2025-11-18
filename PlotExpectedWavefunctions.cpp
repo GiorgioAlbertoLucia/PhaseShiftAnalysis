@@ -59,9 +59,9 @@ void drawExpectedWavefunctions(const std::vector<double>& r, const std::vector<d
     for (size_t ir = 0; ir < r.size(); ir++)
         rEdges[ir+1] = r[ir] + rStep/2.;
     
-    TH1F hNumerical("hNumerical", "; #it{r} (fm); #it{y}_#it{l}(#it{r})", r.size(), &rEdges[0]);
+    TH1F hNumerical("hNumerical", "; #it{r} (fm); #it{y}_{#it{l}} (#it{r})", r.size(), &rEdges[0]);
     hNumerical.SetLineColor(kRed);
-    TH1F hAsymptotic("hAsymptotic", "; #it{r} (fm); #it{y}_#it{l}(#it{r})", r.size(), &rEdges[0]);
+    TH1F hAsymptotic("hAsymptotic", "; #it{r} (fm); #it{y}_{#it{l}} (#it{r})", r.size(), &rEdges[0]);
     hAsymptotic.SetLineColor(kBlue);
 
     const double maxNumerical = *std::max_element(ylNumerical.begin(), ylNumerical.end());

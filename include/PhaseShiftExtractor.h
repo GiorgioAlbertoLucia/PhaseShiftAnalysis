@@ -72,31 +72,24 @@ double PhaseShiftExtractor::matchingFunctionRatio(double delta, void* params) {
     
     MatchingData* data = static_cast<MatchingData*>(params);
     
-    const double r_shifted = data->r_match + delta / data->k;
-    const double kr_shifted1 = data->k * r_shifted;
-    //const double kr_shifted2 = data->k * (r_shifted + 0.001);
-    const double krdr_shifted = data->k * (r_shifted + data->dr_match);
+    const double kr_shifted = data->k * data->r_match + delta;
+    const double krdr_shifted = data->k * (data->r_match + data->dr_match) + delta;
     
     double F_l1[1], F_l2[1], Fp_l[1]; // F_l(eta, x) computed in point 1 and 2 and their derivative
-    if (kr_shifted1 == 0) {
+    if (kr_shifted == 0) {
         F_l1[0] = 0;
     } else {
-        gsl_sf_coulomb_wave_F_array(data->l, /*L_G*/ 0, data->eta, std::abs(kr_shifted1), F_l1, Fp_l);
+        gsl_sf_coulomb_wave_F_array(data->l, /*L_G*/ 0, data->eta, std::abs(kr_shifted), F_l1, Fp_l);
     }
     if (krdr_shifted == 0) {
         F_l2[0] = 0;
     } else {
-        //gsl_sf_coulomb_wave_F_array(data->l, /*L_G*/ 0, data->eta, kr_shifted2, F_l2, Fp_l);
         gsl_sf_coulomb_wave_F_array(data->l, /*L_G*/ 0, data->eta, std::abs(krdr_shifted), F_l2, Fp_l);
     }
     
-    //const double logderiv_num = data->r_match * data->up_num / data->u_num;
-    //const double logderiv_ana = r_shifted * Fp_l[0] / F_l1[0];
-    //const double result = logderiv_num - logderiv_ana;
     const double term1 = data->u_num / data->udr_num;
     const double term2 = F_l1[0] / F_l2[0];
     
-    //return logderiv_num - logderiv_ana;
     return term1 - term2;
 }
 
