@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "TMath.h"
@@ -26,6 +25,11 @@ inline double reducedMass(double m1, double m2) {
 inline double waveNumber(double E_lab, double mu) {
     const double v = TMath::Sqrt(2. * E_lab / constant::M_PROTON); // incident proton beam
     return v * mu / constant::HBARC;
+}
+
+inline double SommerfeldParameter(const double k, const double mu, const double z1, const double z2)
+{
+    return constant::ALPHA_EM * mu * z1 * z2 / k;
 }
 
 inline double waveNumber(const double momentum) { return momentum / constant::HBARC; }
