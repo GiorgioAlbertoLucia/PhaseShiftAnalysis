@@ -1,7 +1,7 @@
 // Intended only to load all the necessary headers for the library and scripts
 // 
 // Run only from the root terminal with the following command:
-// .x run.cc
+// .x load.cpp
 // Do NOT load this file in the ROOT interpreter
 
 #include <iostream>
