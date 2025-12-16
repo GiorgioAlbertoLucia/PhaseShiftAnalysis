@@ -6,20 +6,19 @@
 
 #include "TSystem.h"
 #include "TROOT.h"
+#include <iostream>
 
 void run() {
-    
     gSystem->SetBuildDir("build", kTRUE);
     
-    // Add include paths
-    gSystem->AddIncludePath("-I/opt/homebrew/Cellar/gsl/2.8/include/");
-    gSystem->AddIncludePath("-I/Users/glucia/Projects/CATS/phemto/phase_shift/include/");
-    
     // Load GSL libraries first
-    gSystem->Load("/opt/homebrew/Cellar/gsl/2.8/lib/libgsl.dylib");
-    gSystem->Load("/opt/homebrew/Cellar/gsl/2.8/lib/libgslcblas.dylib");
+    gSystem->Load("/usr/lib/x86_64-linux-gnu/libgsl.so");
+    gSystem->Load("/usr/lib/x86_64-linux-gnu/libgslcblas.so");
+    
+    // Set include path for both compilation and dictionary generation
+    gInterpreter->AddIncludePath("/home/galucia/boost_1_90_0");
     
     // Compile and load
     gROOT->ProcessLine(".L lednicky_integration.cpp+");
-    gROOT->ProcessLine("lednicky_integration()");
+    gROOT->ProcessLine("lednicky_integration_pHe3()");
 }

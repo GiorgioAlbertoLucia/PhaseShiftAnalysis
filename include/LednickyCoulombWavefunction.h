@@ -5,6 +5,10 @@
 #include <complex>
 #include <cmath>
 #include <algorithm>
+#include <numeric>
+
+#include <TMath.h>
+#include <TRandom3.h>
 
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_sf_psi.h>
@@ -12,28 +16,14 @@
 #include <gsl/gsl_sf_coulomb.h>
 #include <gsl/gsl_integration.h>
 
-#include <TMath.h>
+#include <boost/math/constants/constants.hpp>
+#include <boost/math/special_functions/hypergeometric_1F1.hpp>
+#include <boost/math/special_functions/gamma.hpp>
+#include <boost/math/special_functions/digamma.hpp>
 
-
-// Constants class
-namespace Constants {
-    const double M_PROTON = 938.272;    // GeV/c^2
-    const double M_DEUTERON = 1875.613;  // GeV/c^2
-    const double Z_PROTON = 1.0;
-    const double Z_DEUTERON = 1.0;
-    const double HBARC = 197.3;          // MeV·fm
-}
+#include "Constants.h"
 
 class LednickyCoulombWavefunction {
-private:
-    double m1, m2;
-    double charge1, charge2;
-    double f0s, d0s, f0t, d0t;
-    double cg_singlet, cg_triplet;
-    double mu;
-    
-    static const double alpha;
-    static const double hbarc;
     
 public:
     LednickyCoulombWavefunction(double m1, double m2, 
@@ -42,30 +32,28 @@ public:
                                 double f0t, double d0t,
                                 double cg_singlet = 0.25, 
                                 double cg_triplet = 0.75);
+
+    double _eta(const double k) const;
+    double GamowFactor(const double eta) const;
+    std::complex<double> h_function(const double eta) const;
+    void compute_scattering_amplitude(const double k);
+    std::complex<double> _G_tilde(const double rho, const double eta) const;
     
-    double bohr_radius() const;
-    double eta(double k) const;
-    double gamow_factor(double eta) const;
-    std::complex<double> coulomb_function_F(double eta, double xi) const;
-    double h_function(double eta) const;
-    std::complex<double> scattering_amplitude_f_c(double k, double eta, 
-                                                   const char* state) const;
-    std::complex<double> G_function(double rho, double eta) const;
-    
-    void wavefunction_at_point(const double k_vec[3], const double r_vec[3],
-                              std::complex<double>& psi_s, 
-                              std::complex<double>& psi_t) const;
+    void compute_wavefunction(const double k_vec[3], const double r_vec[3],
+                              std::complex<double>& psi_s, std::complex<double>& psi_t);
     
     double correlation_function_optimized(double k, 
                                          double R_source,
-                                         const std::vector<double>& r_points,
-                                         int n_theta = 20, 
-                                         int n_phi = 20) const;
-};
+                                         const int n_iterations = 10000);
 
-// Static member initialization
-const double LednickyCoulombWavefunction::alpha = 1.0/137.036;
-const double LednickyCoulombWavefunction::hbarc = 197.3;
+private:
+    double m1, m2;
+    double charge1, charge2;
+    double f0s, d0s, f0t, d0t;
+    std::complex<double> f_c_s, f_c_t;
+    double cg_singlet, cg_triplet;
+    double mu, a_C;
+};
 
 // Constructor
 LednickyCoulombWavefunction::LednickyCoulombWavefunction(
@@ -78,209 +66,157 @@ LednickyCoulombWavefunction::LednickyCoulombWavefunction(
     : m1(m1), m2(m2), charge1(charge1), charge2(charge2),
       f0s(f0s), d0s(d0s), f0t(f0t), d0t(d0t),
       cg_singlet(cg_singlet), cg_triplet(cg_triplet) {
+    
+    f_c_s = std::complex<double>{0., 0.};
+    f_c_t = std::complex<double>{0., 0.};
     mu = (m1 * m2) / (m1 + m2);
+    a_C = Constants::HBARC / (charge1 * charge2 * mu * Constants::ALPHA_EM); // fm
 }
 
-double LednickyCoulombWavefunction::bohr_radius() const {
-    double charge_product = TMath::Abs(charge1 * charge2);
-    if (charge_product < 1e-10) {
-        return 1e10;  // Very large number instead of infinity
-    }
-    return hbarc / (alpha * charge_product * mu);
+double LednickyCoulombWavefunction::_eta(const double k) const
+{
+    return 1. / (k * a_C);
 }
 
-double LednickyCoulombWavefunction::eta(double k) const {
-    double a_C = bohr_radius();
-    return 1.0 / (k * a_C);
+double LednickyCoulombWavefunction::GamowFactor(const double eta) const
+{
+    return 2. * eta * Constants::PI/ (std::exp(2. * Constants::PI * eta) - 1.);
 }
 
-double LednickyCoulombWavefunction::gamow_factor(double eta) const {
-    if (TMath::Abs(eta) < 1e-10) {
-        return 1.0;
-    }
-    return 2.0 * TMath::Pi() * eta / (TMath::Exp(2.0 * TMath::Pi() * eta) - 1.0);
-}
-
-std::complex<double> LednickyCoulombWavefunction::coulomb_function_F(
-    double eta, double xi) const {
+std::complex<double> LednickyCoulombWavefunction::h_function(double eta) const {
     
-    gsl_sf_result F, Fp, G, Gp;
+    //double h = 0., h_previous = 0;
+    //for (int n = 1; n < 15; n++)
+    //{
+    //    h += eta*eta / (n*(n*n +  eta*eta));
+    //    if ((h - h_previous)/h < 1e-7)
+    //        break;
+    //
+    //    h_previous = h;
+    //}
+    //
+    //h = h - std::log(eta) - Constants::EULER;
+    //
+    //return h;
+
+    std::complex<double> z = {0., eta};
+    return 0.5 * (math::digamma_complex(z) + math::digamma_complex(-z) - std::log(eta*eta));
+}
+
+void LednickyCoulombWavefunction::compute_scattering_amplitude(const double k)
+{
+    
+    double term1_s = -1.0 / f0s;
+    double term2_s = (d0s * k * k) / 2.0;
+
+    double term1_t = -1.0 / f0t;
+    double term2_t = (d0t * k * k) / 2.0;
+    
+    const double eta = _eta(k);
+    double gamow = GamowFactor(eta);
+    
+    std::complex<double> term4 = -2.0 * h_function(eta) / a_C;
+    
+    std::complex<double> denominator_s(term1_s + term2_s, -k * gamow);
+    denominator_s += term4;
+    f_c_s = 1. / denominator_s;
+
+    std::complex<double> denominator_t(term1_t + term2_t, -k * gamow);
+    denominator_t += term4;
+    f_c_t = 1. / denominator_t;
+}
+
+std::complex<double> LednickyCoulombWavefunction::_G_tilde(const double rho, const double eta) const
+{
+    // Debug output
+    //std::cout << "DEBUG _G_tilde: rho = " << rho << ", eta = " << eta << std::endl;
+    
+    if (rho <= 0.0) {
+        std::cerr << "ERROR: rho must be positive! rho = " << rho << std::endl;
+    }
+    if (std::isnan(rho) || std::isnan(eta)) {
+        std::cerr << "ERROR: NaN detected! rho = " << rho << ", eta = " << eta << std::endl;
+    }
+    if (std::isinf(rho) || std::isinf(eta)) {
+        std::cerr << "ERROR: Inf detected! rho = " << rho << ", eta = " << eta << std::endl;
+    }
+    
+    gsl_sf_result F0, G0, F0_prime, G0_prime;
     double exp_F, exp_G;
-    
-    int status = gsl_sf_coulomb_wave_FG_e(eta, xi, 0.0, 0, 
-                                          &F, &Fp, &G, &Gp, 
-                                          &exp_F, &exp_G);
-    
-    return std::complex<double>(F.val, 0.0);
+    double l = 0;
+    gsl_sf_coulomb_wave_FG_e(eta, rho, l, 0, &F0, &G0, &F0_prime, &G0_prime, &exp_F, &exp_G);
+    return std::complex<double>{G0.val, F0.val};
 }
 
-double LednickyCoulombWavefunction::h_function(double eta) const {
-    if (TMath::Abs(eta) < 1e-10) {
-        return 0.0;
-    }
-    
-    // Approximation for h(η) = Re[ψ(iη)]
-    if (TMath::Abs(eta) > 0.1) {
-        return TMath::Log(TMath::Abs(eta)) - 1.0/(2.0*eta);
-    }
-    
-    return 0.0;
-}
+void LednickyCoulombWavefunction::compute_wavefunction(const double k_vec[3], const double r_vec[3],
+                                                       std::complex<double>& psi_s, std::complex<double>& psi_t) 
+{
 
-std::complex<double> LednickyCoulombWavefunction::scattering_amplitude_f_c(
-    double k, double eta, const char* state) const {
-    
-    double f0, d0;
-    if (strcmp(state, "singlet") == 0) {
-        f0 = f0s;
-        d0 = d0s;
-    } else if (strcmp(state, "triplet") == 0) {
-        f0 = f0t;
-        d0 = d0t;
-    } else {
-        return std::complex<double>(0.0, 0.0);
-    }
-    
-    double a_C = bohr_radius();
-    
-    double term1 = -1.0 / f0;
-    double term2 = (d0 * k * k) / 2.0;
-    double gamow = gamow_factor(eta);
-    double term4 = -2.0 * h_function(eta) / a_C;
-    
-    std::complex<double> denominator(term1 + term2 + term4, -k * gamow);
-    
-    return 1.0 / denominator;
-}
+    const double k_dot_r = 0.;
+    std::inner_product(k_vec, k_vec + 3, r_vec, k_dot_r);
+    const double k = std::hypot(k_vec[0], k_vec[1], k_vec[2]);
+    const double r = std::hypot(r_vec[0], r_vec[1], r_vec[2]);
+    const double rho = k*r;
+    //std::cout << "DEBUG compute_wf: k = " << k << ", r = " << r << ", k_dot_r = " << k_dot_r << std::endl;
 
-std::complex<double> LednickyCoulombWavefunction::G_function(
-    double rho, double eta) const {
-    
-    gsl_sf_result F0, Fp, G0, Gp;
-    double exp_F, exp_G;
-    
-    int status = gsl_sf_coulomb_wave_FG_e(eta, rho, 0.0, 0,
-                                          &F0, &Fp, &G0, &Gp,
-                                          &exp_F, &exp_G);
-    
-    double A_C = gamow_factor(eta);
-    std::complex<double> result = TMath::Sqrt(A_C) * 
-                                  std::complex<double>(G0.val, F0.val);
-    
-    return result;
-}
+    const double xi = rho + k_dot_r;
 
-void LednickyCoulombWavefunction::wavefunction_at_point(
-    const double k_vec[3], const double r_vec[3],
-    std::complex<double>& psi_s, 
-    std::complex<double>& psi_t) const {
-    
-    double k = TMath::Sqrt(k_vec[0]*k_vec[0] + k_vec[1]*k_vec[1] + k_vec[2]*k_vec[2]);
-    double r = TMath::Sqrt(r_vec[0]*r_vec[0] + r_vec[1]*r_vec[1] + r_vec[2]*r_vec[2]);
-    
-    double eta_val = eta(k);
-    double A_C = gamow_factor(eta_val);
-    
-    double cos_theta = (k * r > 1e-10) ? 
-        (k_vec[0]*r_vec[0] + k_vec[1]*r_vec[1] + k_vec[2]*r_vec[2]) / (k * r) : 1.0;
-    
-    double rho = k * r;
-    double xi = rho * (1.0 + cos_theta);
-    
-    // Scattering amplitudes
-    std::complex<double> f_c_s = scattering_amplitude_f_c(k, eta_val, "singlet");
-    std::complex<double> f_c_t = scattering_amplitude_f_c(k, eta_val, "triplet");
-    
-    // Coulomb functions
-    std::complex<double> F = coulomb_function_F(eta_val, xi);
-    std::complex<double> G = G_function(rho, eta_val);
-    
-    // Phase factor
+    const double eta = _eta(k);
+    const double A_c = GamowFactor(eta);
+    //std::cout << "DEBUG: eta = " << eta << ", a_C = " << a_C << std::endl;
+
     gsl_sf_result lnr, arg;
-    gsl_sf_lngamma_complex_e(1.0, eta_val, &lnr, &arg);
-    std::complex<double> phase(TMath::Cos(arg.val), TMath::Sin(arg.val));
+    gsl_sf_lngamma_complex_e(1., eta, &lnr, &arg);
+    //const std::complex<double> e_i_sigma_c = std::exp(std::complex<double>(lnr.val, arg.val));
+    const std::complex<double> e_i_sigma_c = std::exp(std::complex<double>(0., arg.val));
     
-    // Wavefunctions
-    std::complex<double> common = phase * TMath::Sqrt(A_C) * 
-                                  std::exp(std::complex<double>(0.0, -rho)) * F;
-    
-    psi_s = common + f_c_s * G / r;
-    psi_t = common + f_c_t * G / r;
+    //const std::complex<double> e_i_sigma_c{std::cos(sigma_c), std::sin(sigma_c)};
+
+    //const std::complex<double> F = boost::math::hypergeometric_1F1(std::complex<double>{0., -eta}, 1., std::complex<double>{0., xi});
+    //std::cout << "DEBUG: eta = " << eta << ", xi = " << xi << std::endl;
+    const std::complex<double> F = math::hypergeometric_1F1_complex(eta, xi);
+
+    LednickyCoulombWavefunction::compute_scattering_amplitude(k);
+
+    const std::complex<double> G_tilde = _G_tilde(rho, eta);
+
+    const std::complex<double> common_term = e_i_sigma_c * std::sqrt(A_c) * std::complex<double>{std::cos(k_dot_r), std::sin(k_dot_r)} * F;
+
+    psi_s = common_term + e_i_sigma_c * std::sqrt(A_c) * f_c_s * G_tilde / r;
+    psi_t = common_term + e_i_sigma_c * std::sqrt(A_c) * f_c_t * G_tilde / r;
 }
 
-double LednickyCoulombWavefunction::correlation_function_optimized(
-    double k, 
-    double R_source,
-    const std::vector<double>& r_points,
-    int n_theta, 
-    int n_phi) const {
-    
-    // Pre-compute angular grid
-    std::vector<double> theta(n_theta), phi(n_phi);
-    for (int i = 0; i < n_theta; ++i) {
-        theta[i] = i * TMath::Pi() / (n_theta - 1);
-    }
-    for (int i = 0; i < n_phi; ++i) {
-        phi[i] = i * 2.0 * TMath::Pi() / (n_phi - 1);
-    }
-    
-    double dtheta = theta[1] - theta[0];
-    double dphi = phi[1] - phi[0];
+
+
+
+double LednickyCoulombWavefunction::correlation_function_optimized(double k, double R_source,
+                                                                   const int n_iterations) {
     
     double k_vec[3] = {0.0, 0.0, k};
+    double r_vec[3] = {0., 0., 0.};
+    const double sqrt2 = std::sqrt(2);
     
-    std::vector<double> integrand_s(r_points.size());
-    std::vector<double> integrand_t(r_points.size());
-    
-    // Gaussian source function
-    double source_norm = 1.0 / TMath::Power(2.0 * R_source * TMath::Sqrt(TMath::Pi()), 3);
-    
-    for (size_t j = 0; j < r_points.size(); ++j) {
-        double r = r_points[j];
-        double source_val = source_norm * TMath::Exp(-r*r / (2.0 * R_source * R_source));
-        
-        double psi_s_squared_sum = 0.0;
-        double psi_t_squared_sum = 0.0;
-        
-        for (int ti = 0; ti < n_theta; ++ti) {
-            double th = theta[ti];
-            double sin_th = TMath::Sin(th);
-            
-            for (int pi = 0; pi < n_phi; ++pi) {
-                double ph = phi[pi];
-                
-                double r_vec[3] = {
-                    r * sin_th * TMath::Cos(ph),
-                    r * sin_th * TMath::Sin(ph),
-                    r * TMath::Cos(th)
-                };
-                
-                std::complex<double> psi_s, psi_t;
-                wavefunction_at_point(k_vec, r_vec, psi_s, psi_t);
-                
-                double weight = sin_th * dtheta * dphi;
-                psi_s_squared_sum += std::norm(psi_s) * weight;
-                psi_t_squared_sum += std::norm(psi_t) * weight;
-            }
-        }
-        
-        double psi_s_squared_avg = psi_s_squared_sum / (4.0 * TMath::Pi());
-        double psi_t_squared_avg = psi_t_squared_sum / (4.0 * TMath::Pi());
-        
-        integrand_s[j] = source_val * psi_s_squared_avg * r * r;
-        integrand_t[j] = source_val * psi_t_squared_avg * r * r;
-    }
-    
-    // Trapezoidal integration
+    std::complex<double> psi_s, psi_t;
     double C_s = 0.0, C_t = 0.0;
-    for (size_t i = 1; i < r_points.size(); ++i) {
-        double dr = r_points[i] - r_points[i-1];
-        C_s += 0.5 * (integrand_s[i] + integrand_s[i-1]) * dr;
-        C_t += 0.5 * (integrand_t[i] + integrand_t[i-1]) * dr;
+        
+    
+    std::vector<double> integrand_s(n_iterations);
+    std::vector<double> integrand_t(n_iterations);
+    
+    for (size_t iter = 0; static_cast<int>(iter) < n_iterations; ++iter) {
+        
+        r_vec[0] = gRandom->Gaus() * R_source * sqrt2;
+        r_vec[1] = gRandom->Gaus() * R_source * sqrt2;
+        r_vec[2] = gRandom->Gaus() * R_source * sqrt2;
+        
+        compute_wavefunction(k_vec, r_vec, psi_s, psi_t);
+                
+        C_s += std::norm(psi_s);
+        C_t += std::norm(psi_t);
     }
     
-    C_s *= 4.0 * TMath::Pi();
-    C_t *= 4.0 * TMath::Pi();
+    C_s = C_s / n_iterations;
+    C_t = C_t / n_iterations;
     
     return cg_singlet * C_s + cg_triplet * C_t;
 }
