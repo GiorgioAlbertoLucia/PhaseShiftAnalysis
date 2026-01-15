@@ -97,8 +97,7 @@ std::complex<double> CoulombWavefunction::_G_tilde(const double rho, const doubl
 void CoulombWavefunction::compute_wavefunction(const double k_vec[3], const double r_vec[3],
                                                        std::complex<double>& psi_c) 
 {
-    const double k_dot_r = 0.;
-    std::inner_product(k_vec, k_vec + 3, r_vec, k_dot_r);
+    const double k_dot_r = std::inner_product(k_vec, k_vec + 3, r_vec, 0.);
     const double k = std::hypot(k_vec[0], k_vec[1], k_vec[2]);
     const double r = std::hypot(r_vec[0], r_vec[1], r_vec[2]);
     const double rho = k*r;
@@ -113,7 +112,7 @@ void CoulombWavefunction::compute_wavefunction(const double k_vec[3], const doub
     gsl_sf_lngamma_complex_e(1., eta, &lnr, &arg);
     const std::complex<double> Gamma = std::exp(std::complex<double>(lnr.val, arg.val));
 
-    const std::complex<double> F = math::hypergeometric_1F1_complex(eta, xi);
+    const std::complex<double> F = math::hypergeometric_1F1_complex(eta, xi, 1.e-12, 400);
     psi_c = std::exp(- Constants::PI * eta / 2.) * Gamma * std::exp(std::complex<double>(0., k_dot_r)) * F;
 }
 
@@ -122,8 +121,7 @@ void CoulombWavefunction::compute_wavefunction_series(const double k_vec[3], con
 {
     using namespace std::complex_literals;
 
-    const double k_dot_r = 0.;
-    std::inner_product(k_vec, k_vec + 3, r_vec, k_dot_r);
+    const double k_dot_r = std::inner_product(k_vec, k_vec + 3, r_vec, 0.);
     const double k = std::hypot(k_vec[0], k_vec[1], k_vec[2]);
     const double r = std::hypot(r_vec[0], r_vec[1], r_vec[2]);
     const double rho = k*r;
@@ -161,6 +159,7 @@ double CoulombWavefunction::correlation_function_optimized(double k, double R_so
     double k_vec[3] = {0.0, 0.0, k};
     double r_vec[3] = {0., 0., 0.};
     const double sqrt2 = std::sqrt(2);
+    double r, costheta, sintheta, phi;
     
     std::complex<double> psi_c;
     double C = 0.0;
@@ -171,9 +170,18 @@ double CoulombWavefunction::correlation_function_optimized(double k, double R_so
     
     for (size_t iter = 0; static_cast<int>(iter) < n_iterations; ++iter) {
         
-        r_vec[0] = gRandom->Gaus() * R_source * sqrt2;
-        r_vec[1] = gRandom->Gaus() * R_source * sqrt2;
-        r_vec[2] = gRandom->Gaus() * R_source * sqrt2;
+        r_vec[0] = gRandom->Gaus(0., R_source * sqrt2);
+        r_vec[1] = gRandom->Gaus(0., R_source * sqrt2);
+        r_vec[2] = gRandom->Gaus(0., R_source * sqrt2);
+
+        //r = gRandom->Gaus(0., R_source * sqrt2);
+        //costheta = gRandom->Uniform(-1., 1.);
+        //phi = gRandom->Uniform(0., 2. * Constants::PI);
+        //sintheta = std::sqrt(1. - costheta*costheta);
+        //
+        //r_vec[0] = r * sintheta* std::cos(phi);
+        //r_vec[1] = r * sintheta* std::sin(phi);
+        //r_vec[2] = r * costheta;
         
         compute_wavefunction(k_vec, r_vec, psi_c);
         //compute_wavefunction_series(k_vec, r_vec, psi_c);

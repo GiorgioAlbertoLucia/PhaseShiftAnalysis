@@ -85,22 +85,22 @@ double LednickyCoulombWavefunction::GamowFactor(const double eta) const
 
 std::complex<double> LednickyCoulombWavefunction::h_function(double eta) const {
     
-    //double h = 0., h_previous = 0;
-    //for (int n = 1; n < 15; n++)
-    //{
-    //    h += eta*eta / (n*(n*n +  eta*eta));
-    //    if ((h - h_previous)/h < 1e-7)
-    //        break;
-    //
-    //    h_previous = h;
-    //}
-    //
-    //h = h - std::log(eta) - Constants::EULER;
-    //
-    //return h;
+    double h = 0., h_previous = 0;
+    for (int n = 1; n < 30; n++)
+    {
+        h += eta*eta / (n*(n*n +  eta*eta));
+        if ((h - h_previous)/h < 1e-7)
+            break;
+    
+        h_previous = h;
+    }
+    
+    h = h - std::log(eta) - Constants::EULER;
+    
+    return std::complex<double>{h, 0.};
 
-    std::complex<double> z = {0., eta};
-    return 0.5 * (math::digamma_complex(z) + math::digamma_complex(-z) - std::log(eta*eta));
+    //std::complex<double> z = {0., eta};
+    //return 0.5 * (math::digamma_complex(z) + math::digamma_complex(-z) - std::log(eta*eta));
 }
 
 void LednickyCoulombWavefunction::compute_scattering_amplitude(const double k)
@@ -152,8 +152,7 @@ void LednickyCoulombWavefunction::compute_wavefunction(const double k_vec[3], co
                                                        std::complex<double>& psi_s, std::complex<double>& psi_t) 
 {
 
-    const double k_dot_r = 0.;
-    std::inner_product(k_vec, k_vec + 3, r_vec, k_dot_r);
+    const double k_dot_r = std::inner_product(k_vec, k_vec + 3, r_vec, 0.);
     const double k = std::hypot(k_vec[0], k_vec[1], k_vec[2]);
     const double r = std::hypot(r_vec[0], r_vec[1], r_vec[2]);
     const double rho = k*r;
@@ -174,13 +173,13 @@ void LednickyCoulombWavefunction::compute_wavefunction(const double k_vec[3], co
 
     //const std::complex<double> F = boost::math::hypergeometric_1F1(std::complex<double>{0., -eta}, 1., std::complex<double>{0., xi});
     //std::cout << "DEBUG: eta = " << eta << ", xi = " << xi << std::endl;
-    const std::complex<double> F = math::hypergeometric_1F1_complex(eta, xi);
+    const std::complex<double> F = math::hypergeometric_1F1_complex(eta, xi, 1.e-12, 400);
 
     LednickyCoulombWavefunction::compute_scattering_amplitude(k);
 
     const std::complex<double> G_tilde = _G_tilde(rho, eta);
 
-    const std::complex<double> common_term = e_i_sigma_c * std::sqrt(A_c) * std::complex<double>{std::cos(k_dot_r), std::sin(k_dot_r)} * F;
+    const std::complex<double> common_term = e_i_sigma_c * std::sqrt(A_c) * std::exp(std::complex<double>{0., -k_dot_r}) * F;
 
     psi_s = common_term + e_i_sigma_c * std::sqrt(A_c) * f_c_s * G_tilde / r;
     psi_t = common_term + e_i_sigma_c * std::sqrt(A_c) * f_c_t * G_tilde / r;
@@ -195,6 +194,7 @@ double LednickyCoulombWavefunction::correlation_function_optimized(double k, dou
     double k_vec[3] = {0.0, 0.0, k};
     double r_vec[3] = {0., 0., 0.};
     const double sqrt2 = std::sqrt(2);
+    double r, costheta, sintheta, phi;
     
     std::complex<double> psi_s, psi_t;
     double C_s = 0.0, C_t = 0.0;
@@ -205,9 +205,18 @@ double LednickyCoulombWavefunction::correlation_function_optimized(double k, dou
     
     for (size_t iter = 0; static_cast<int>(iter) < n_iterations; ++iter) {
         
-        r_vec[0] = gRandom->Gaus() * R_source * sqrt2;
-        r_vec[1] = gRandom->Gaus() * R_source * sqrt2;
-        r_vec[2] = gRandom->Gaus() * R_source * sqrt2;
+        r_vec[0] = gRandom->Gaus(0., R_source * sqrt2);
+        r_vec[1] = gRandom->Gaus(0., R_source * sqrt2);
+        r_vec[2] = gRandom->Gaus(0., R_source * sqrt2);
+
+        //r = gRandom->Gaus(0., R_source * sqrt2);
+        //costheta = gRandom->Uniform(-1., 1.);
+        //phi = gRandom->Uniform(0., 2. * Constants::PI);
+        //sintheta = std::sqrt(1. - costheta*costheta);
+        //
+        //r_vec[0] = r * sintheta* std::cos(phi);
+        //r_vec[1] = r * sintheta* std::sin(phi);
+        //r_vec[2] = r * costheta;
         
         compute_wavefunction(k_vec, r_vec, psi_s, psi_t);
                 
