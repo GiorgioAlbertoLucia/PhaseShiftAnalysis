@@ -199,8 +199,8 @@ def compare_strong_interaction_Coulomb(outfile:TFile, pdf_path:str,  **kwargs):
         hists[title] = outfile.Get(f'r=6.23_fm/{name}')
         set_root_object(hists[title], name=name, line_color=colors[ihist], line_width=2)
 
-    hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'] = outfile.Get(f'r=5.08_fm/hist_Ck_Coulomb_swave')
-    set_root_object(hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'], line_color=colors[len(hists)-1], line_width=2)
+    #hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'] = outfile.Get(f'r=5.08_fm/hist_Ck_Coulomb_swave')
+    #set_root_object(hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'], line_color=colors[len(hists)-1], line_width=2)
 
     coulomb_file = TFile.Open('/Users/glucia/Projects/CATS/phemto/output/CATS_CF_LS_6p23fm.root')
     hists['Coulomb-only'] = coulomb_file.Get(f'hHe3_p_Coul_CF')
@@ -254,7 +254,6 @@ if __name__ == '__main__':
 
 
     outfile.Close()
-    exit(0)
 
     ########### proton - deuteron
 
@@ -263,8 +262,8 @@ if __name__ == '__main__':
     a0s_pd = -0.13  # fm - scattering length singlet
     a0t_pd = 14.7  # fm - scattering length triplet
 
-    a0s_pd = -1.3  # fm - scattering length singlet
-    a0t_pd = -11.4  # fm - scattering length triplet
+    a0s_pd = 2.73  # fm - scattering length singlet
+    a0t_pd = 11.88  # fm - scattering length triplet
 
     if do_computation:
         outfile = TFile.Open('output/mrowczynsky_approach_pd.root', 'recreate')

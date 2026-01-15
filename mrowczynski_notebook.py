@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import quad
+import ROOT
 
 # Physical constants and parameters
 alpha = 1/137  # fine-structure constant
@@ -106,27 +107,90 @@ def Funcorrr(q, Rs):
 
 # Complete correlation function
 def Funcorr(q, Rs):
-    return (Gamow(q) * ((1/3)*Funcorr1s(q, Rs) + (2/3)*(Funcorr3s(q, Rs))) ) # + Funcorrr(q, Rs) - 1.0)))
+    result = (Gamow(q) * ((1/4)*Funcorr1s(q, Rs) + (3/4)*(Funcorr3s(q, Rs))) ) # + Funcorrr(q, Rs) - 1.0)))
+    return result if result > 0 else 0.0
 
 # Generate plot
+#if __name__ == "__main__":
+#    q_values = np.linspace(0., 150, 100)
+#    
+#    # Calculate correlation values
+#    Rs_values = [1.5, 2., 2.5, 3.]
+#    
+#    plt.figure(figsize=(10, 6))
+#    
+#    for Rs in Rs_values:
+#        corr_values = [Funcorr(q, Rs/197.3) for q in q_values]
+#        plt.plot(q_values, corr_values, linewidth=2, label=f'Rs = {Rs}')
+#    
+#    plt.xlim(0., 150.0)
+#    plt.ylim(0, 2.5)
+#    plt.xlabel('k* (MeV/c)', fontsize=12)
+#    plt.ylabel('C(k*)', fontsize=12)
+#    plt.title('', fontsize=14)
+#    plt.legend()
+#    plt.grid(True, alpha=0.3)
+#    plt.tight_layout()
+#    plt.savefig('output/mrowczynski_3He_p_correlation.pdf', dpi=300)
+
+
 if __name__ == "__main__":
-    q_values = np.linspace(0., 150, 100)
-    
-    # Calculate correlation values
-    Rs_values = [1.5, 2., 2.5, 3.]
-    
-    plt.figure(figsize=(10, 6))
-    
-    for Rs in Rs_values:
-        corr_values = [Funcorr(q, Rs/197.3) for q in q_values]
-        plt.plot(q_values, corr_values, linewidth=2, label=f'Rs = {Rs}')
-    
-    plt.xlim(0., 150.0)
-    plt.ylim(0, 2.5)
-    plt.xlabel('q (1/fm)', fontsize=12)
-    plt.ylabel('C(q)', fontsize=12)
-    plt.title('3He-p Correlation Function', fontsize=14)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.show()
+    q_values = np.linspace(0., 150., 100)
+
+    Rs_values = [1.5, 2., 2.5, 3., 6.23]
+
+    c = ROOT.TCanvas("c", "3He-p correlation", 800, 600)
+    outfile = ROOT.TFile("output/mrowczynski_3He_p_correlation.root", "RECREATE")
+
+    mg = ROOT.TMultiGraph()
+    legend = ROOT.TLegend(0.55, 0.55, 0.82, 0.78)
+    legend.SetBorderSize(0)
+    legend.SetFillStyle(0)
+
+    colors = [ROOT.kOrange-3, ROOT.kBlue-2, ROOT.kGreen+2, ROOT.kRed+1, ROOT.kViolet+1, ROOT.kCyan+3, ROOT.kMagenta, ROOT.kTeal+2]
+    hists, graphs = [], []
+
+    for i, Rs in enumerate(Rs_values):
+        corr_values = np.array([Funcorr(q, Rs/197.3) for q in q_values])
+
+        graph = ROOT.TGraph(
+            len(q_values),
+            q_values.astype(np.float64),
+            corr_values.astype(np.float64)
+        )
+
+        hist = ROOT.TH1F(f"hist_Rs_{Rs}", f"3He-p Correlation Function Rs={Rs} fm", 100, 0., 150.)
+        for j in range(len(q_values)):
+            hist.Fill(q_values[j], corr_values[j])
+
+        graph.SetLineWidth(2)
+        graph.SetLineColor(colors[i])
+        graph.SetMarkerColor(colors[i])
+
+        graphs.append(graph)
+        hists.append(hist)
+        if Rs == 6.23:
+            continue
+        mg.Add(graph, "L")
+        legend.AddEntry(graph, f"R_{{s}} = {Rs} fm", "l")
+
+    mg.Draw("A")
+    mg.GetXaxis().SetTitle("#it{k}* (MeV/#it{c})")
+    mg.GetYaxis().SetTitle("C(#it{k}*)")
+    mg.GetXaxis().SetLimits(0., 150.)
+    mg.SetMinimum(0.)
+    mg.SetMaximum(2.5)
+
+    legend.Draw()
+    c.Update()
+    c.SaveAs("output/mrowczynski_3He_p_correlation.pdf")
+
+
+    for hist, graph, Rs in zip(hists, graphs, Rs_values):
+        outdir = outfile.mkdir(f"r={Rs:.2f}_fm")
+        outdir.cd()
+        hist.Write()
+        graph.Write()
+
+    c.Write()
+    outfile.Close()

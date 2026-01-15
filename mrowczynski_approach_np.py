@@ -157,7 +157,7 @@ def plot_strong_interaction_Coulomb(outfile:TFile, mass1, mass2, z1, z2, a0s, a0
                     h_Ck_Coulomb_swave_paper]:
 
             hist.Write()
-            hist_GeV = scale_hist_axis(hist, 1_000, name=f'{hist.GetName()}_GeV', title=';#it{k}* (GeV/#it{c}); #it{C}(#it{k}*)')
+            hist_GeV = scale_hist_axis(hist, 1_000, name=f'{hist.GetName()}_GeV', title=';#it{k}* (MeV/#it{c}); #it{C}(#it{k}*)')
             hist_GeV.Write()
 
             hist.Reset()
@@ -167,7 +167,7 @@ def draw_strong_interaction_Coulomb(outfile:TFile, pdf_path:str, suffix:str='', 
     required_name = f'hist_Ck_Coulomb_swave{approach}'
 
     canvas = TCanvas('strong', 'Coulomb + s-wave; #it{k}* (GeV/#it{c}); C(#it{k}*)')
-    canvas.DrawFrame(0., 0., 150, kwargs.get('ymax', 3.6), 'Coulomb + s-wave; #it{k}* (GeV/#it{c}); C(#it{k}*)')
+    canvas.DrawFrame(0., 0., 150, kwargs.get('ymax', 3.6), 'Coulomb + s-wave; #it{k}* (MeV/#it{c}); C(#it{k}*)')
     hists = {}
     colors = [kOrange-3, kBlue-2, kGreen+2, kRed+1, kViolet+1, kCyan+3, kMagenta, 4]
     
@@ -199,29 +199,36 @@ def draw_strong_interaction_Coulomb(outfile:TFile, pdf_path:str, suffix:str='', 
     canvas.SaveAs(f'{pdf_path}/Coulomb_swave{suffix}{approach}_np.pdf')
 
 
-def compare_strong_interaction_Coulomb(outfile:TFile, pdf_path:str,  **kwargs):
+def compare_strong_interaction_Coulomb(outfile:TFile, pdf_path:str, **kwargs):
 
     canvas = TCanvas('strong', 'Coulomb + s-wave; #it{k}* (GeV/#it{c}); C(#it{k}*)')
-    canvas.DrawFrame(0., 0., 400, kwargs.get('ymax', 3.6), 'Coulomb + s-wave; #it{k}* (GeV/#it{c}); C(#it{k}*)')
+    canvas.DrawFrame(0., 0., 400, kwargs.get('ymax', 3.6), 'Coulomb + s-wave; #it{k}* (MeV/#it{c}); C(#it{k}*)')
     hists = {}
     colors = [kOrange-3, kBlue-2, kGreen+2, kRed+1, kViolet+1, kCyan+3, kMagenta, kTeal+2]
+
+    outfiles = {
+        'Mrowczynski': kwargs.get('mrowczynski_file', outfile),
+        'CATS': outfile,
+        'Torres-Rincon': outfile
+    }
     
     for ihist, (title, name) in enumerate({ 'Mrowczynski': 'hist_Ck_Coulomb_swave',
                                             'CATS': 'hist_Ck_Coulomb_swave_CATS',
                                             'Torres-Rincon': 'hist_Ck_Coulomb_swave_paper'}.items()):
-        hists[title] = outfile.Get(f'r=6.23_fm/{name}')
+        hists[title] = outfiles[title].Get(f'r=6.23_fm/{name}')
         set_root_object(hists[title], name=name, line_color=colors[ihist], line_width=2)
 
-    hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'] = outfile.Get(f'r=5.08_fm/hist_Ck_Coulomb_swave')
-    set_root_object(hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'], line_color=colors[len(hists)-1], line_width=2)
+    #hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'] = outfile.Get(f'r=5.08_fm/hist_Ck_Coulomb_swave')
+    #set_root_object(hists['Mrowczynski (#it{R}_{s} = 5.08 fm)'], line_color=colors[len(hists)-1], line_width=2)
 
-    coulomb_file = TFile.Open('/Users/glucia/Projects/CATS/phemto/output/CATS_CF_LS_6p23fm.root')
+    #coulomb_file = TFile.Open('/Users/glucia/Projects/CATS/phemto/output/CATS_CF_LS_6p23fm.root')
+    coulomb_file = TFile.Open('/home/galucia/PhaseShiftAnalysis/output/CATS_CF_LS_6p23fm.root')
     hists['Coulomb-only'] = coulomb_file.Get(f'hHe3_p_Coul_CF')
     set_root_object(hists['Coulomb-only'], line_color=colors[len(hists)-1], line_width=2)
 
-    gamow_file = TFile.Open('/Users/glucia/Projects/CATS/phemto/output/CATS_phe_radii.root')
-    hists['Gamow factor'] = gamow_file.Get(f'CF/hCF_GamowFactor')
-    set_root_object(hists['Gamow factor'], line_color=kGray+2, line_width=2)
+    #gamow_file = TFile.Open('/Users/glucia/Projects/CATS/phemto/output/CATS_phe_radii.root')
+    #hists['Gamow factor'] = gamow_file.Get(f'CF/hCF_GamowFactor')
+    #set_root_object(hists['Gamow factor'], line_color=kGray+2, line_width=2)
 
     legend = TLegend(*kwargs.get('legend_position', (0.35, 0.3, 0.85, 0.6)))
     legend.SetFillColor(0)
@@ -242,7 +249,7 @@ if __name__ == '__main__':
     #evaluate_integral()
 
     gStyle.SetOptStat(0)
-    do_computation = True
+    do_computation = False
 
     # values taken from https://arxiv.org/abs/2001.11351
     a0s_phe3 = 11.1  # fm - scattering length singlet
@@ -260,14 +267,15 @@ if __name__ == '__main__':
     else:
         outfile = TFile.Open('output/mrowczynsky_approach_pHe3.root')
 
-    draw_strong_interaction_Coulomb(outfile, 'output', '_pHe3', legend_position=(0.55, 0.5, 0.85, 0.8))
+    outfile_mrowczynski = TFile.Open('output/mrowczynski_approach_pHe3_np.root')
+
+    draw_strong_interaction_Coulomb(outfile, 'output', '_pHe3', ymax=3.5, legend_position=(0.55, 0.5, 0.85, 0.8))
     draw_strong_interaction_Coulomb(outfile, 'output', '_pHe3', '_CATS', ymax=1.05, legend_position=(0.55, 0.2, 0.85, 0.45))
     draw_strong_interaction_Coulomb(outfile, 'output', '_pHe3', '_paper', ymax=1.1, legend_position=(0.55, 0.2, 0.85, 0.45))
-    compare_strong_interaction_Coulomb(outfile, 'output', ymax=1.05)
+    compare_strong_interaction_Coulomb(outfile, 'output', ymax=1.05, outfile_mrowczynski=outfile_mrowczynski)
 
 
     outfile.Close()
-    exit(0)
 
     ########### proton - deuteron
 
@@ -276,8 +284,8 @@ if __name__ == '__main__':
     a0s_pd = -0.13  # fm - scattering length singlet
     a0t_pd = 14.7  # fm - scattering length triplet
 
-    a0s_pd = -1.3  # fm - scattering length singlet
-    a0t_pd = -11.4  # fm - scattering length triplet
+    a0s_pd = 2.73  # fm - scattering length singlet
+    a0t_pd = 11.88  # fm - scattering length triplet
 
     if do_computation:
         outfile = TFile.Open('output/mrowczynsky_approach_pd.root', 'recreate')
