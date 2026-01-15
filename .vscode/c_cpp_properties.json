@@ -9,7 +9,9 @@
                 "/opt/homebrew/Cellar/boost/1.89.0_1/include/boost/",
                 "/opt/homebrew/Cellar/boost/1.89.0_1/include",
                 "/var/opt/root-6.32.06/root_install/include/",
-                "/home/galucia/boost_1_90_0/"
+                "/home/galucia/boost_1_90_0/",
+                "/usr/include/eigen3",
+                "/home/galucia/local/include/"
             ],
             "defines": [],
             "compilerPath": "/opt/homebrew/opt/llvm/bin/clang",

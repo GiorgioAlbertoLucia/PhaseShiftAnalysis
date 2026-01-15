@@ -53,7 +53,29 @@ double getKstar(const double incidentMomentum) {
     return 0.5 * kmuStar.P();
 }
 
+double computeKstarFromEprojectile(const double Eprojectile, const double mProjectile, const double mTarget) {
+
+    const double Etotal = Eprojectile + mProjectile;
+    const double incidentMomentum = std::sqrt(Etotal * Etotal - mProjectile * mProjectile);
+    ROOT::Math::PxPyPzMVector incidentPmu(0., 0., incidentMomentum, mProjectile);
+    ROOT::Math::PxPyPzM4D targetPmu(0., 0., 0., mTarget);
+
+    auto pBetaVector = (incidentPmu + targetPmu).BoostToCM();
+    double beta_px = 0., beta_py = 0., beta_pz = 0.;
+    pBetaVector.GetCoordinates(beta_px, beta_py, beta_pz);
+    ROOT::Math::Boost pBoost(beta_px, beta_py, beta_pz);
+
+    ROOT::Math::PxPyPzMVector incidentPmuToBoost(0., 0., incidentMomentum, mProjectile);
+    ROOT::Math::PxPyPzM4D targetPmuToBoost(0., 0., 0., mTarget);
+    auto p1muStar = pBoost(incidentPmuToBoost);
+    auto p2muStar = pBoost(targetPmuToBoost);
+
+    auto kmuStar = (p1muStar - p2muStar);
+    return 0.5 * kmuStar.P();
+}
+
 // Coulomb potential
 inline double coulombPotential(double r, double Z1, double Z2) {
+    if (r < 1.e-10) return 0.; 
     return constant::E_CHARGE_SQ * Z1 * Z2 / r;
 }

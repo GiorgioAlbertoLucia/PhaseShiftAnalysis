@@ -37,7 +37,7 @@ class WoodsSaxonPotential: public Potential {
         }
 
         double eval(const double r) const override {
-            return -mV0 / (1.0 + TMath::Exp((r - mR) / ma));
+            return mV0 / (1.0 + TMath::Exp((r - mR) / ma));
         }
 
         double getParameter(const int iparam) const override {
@@ -102,7 +102,7 @@ class GausPotential: public Potential {
         }
 
         double eval(const double r) const override {
-            return -mV0 * std::exp(- r*r / (2*mSigma*mSigma));
+            return mV0 * std::exp(- r*r / (mSigma*mSigma));
         }
 
         double getParameter(const int iparam) const override {
@@ -218,5 +218,88 @@ class DoubleGausPotential: public Potential {
         double mSigmaAError;   // Radius (fm)
         double mV0BError;      // Depth (MeV)
         double mSigmaBError;   // Radius (fm)
+        
+};
+
+class DoubleSquareWellPotential: public Potential {
+    public:
+        DoubleSquareWellPotential() = default;
+        explicit DoubleSquareWellPotential(const double V0A, const double WidthA, const double V0B, const double WidthB):
+            mV0A(V0A), mWidthA(WidthA), mV0B(V0B), mWidthB(WidthB) {}
+
+        void setParameters(double* parameters) override {
+            mV0A = parameters[0];
+            mWidthA = parameters[1];
+            mV0B = parameters[2];
+            mWidthB = parameters[3];
+        }
+
+        void setParameterErrors(double* parameterErrors) override {
+            mV0AError = parameterErrors[0];
+            mWidthAError = parameterErrors[1];
+            mV0BError = parameterErrors[2];
+            mWidthBError = parameterErrors[3];
+        }
+
+        double eval(const double r) const override {
+            if (mWidthA < mWidthB) {
+                if (r <= mWidthA)        return mV0A;
+                else if (r <= mWidthB)   return mV0B;
+                else                    return 0;
+              } else {
+                if (r <= mWidthB)        return mV0B;
+                else if (r <= mWidthA)   return mV0A;
+                else                    return 0;
+              }
+            return -999.f;
+        }
+
+        double getParameter(const int iparam) const override {
+            switch (iparam) {
+                case 0:     return mV0A;
+                case 1:     return mWidthA;
+                case 2:     return mV0B;
+                case 3:     return mWidthB;
+                default:    return -999.f;
+            }
+        }
+
+        double getParameterError(const int iparam) const override {
+            switch (iparam) {
+                case 0:     return mV0AError;
+                case 1:     return mWidthAError;
+                case 2:     return mV0BError;
+                case 3:     return mWidthBError;
+                default:    return -999.f;
+            }
+        }
+
+        std::string getParameterName(const int iparam) const override {
+            switch (iparam) {
+                case 0:     return std::string("mV0A");
+                case 1:     return std::string("mWidthA");
+                case 2:     return std::string("mV0B");
+                case 3:     return std::string("mWidthB");
+                default:    return std::string("");
+            }
+        }
+
+        int getNPars() const override { return 4; }
+
+        double evalWithCoulomb(const double r, const double Z1 = 0, const double Z2 = 0) const override {
+            double V = eval(r);
+            V += coulombPotential(r, Z1, Z2);
+            return V;
+    }
+    
+    private:
+        double mV0A;            // Depth (MeV)
+        double mWidthA;        // Width (fm)
+        double mV0B;            // Depth (MeV)
+        double mWidthB;        // Width (fm)
+        double mV0AError;       // Depth (MeV)
+        double mWidthAError;   // Width (fm)
+        double mV0BError;       // Depth (MeV)
+        double mWidthBError;   // Width (fm)
         
 };
