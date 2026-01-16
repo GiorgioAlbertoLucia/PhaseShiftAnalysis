@@ -9,24 +9,30 @@
 #include <iostream>
 
 void run() {
-    gSystem->SetBuildDir("build", kTRUE);
-    
-    // Load GSL libraries first
-    gSystem->Load("/usr/lib/x86_64-linux-gnu/libgsl.so");
-    gSystem->Load("/usr/lib/x86_64-linux-gnu/libgslcblas.so");
-    
-    // Set include path for both compilation and dictionary generation
-    gInterpreter->AddIncludePath("/home/galucia/boost_1_90_0");
-    gInterpreter->AddIncludePath("/home/galucia/eigen");
-    
-    // Compile and load
 
-    gROOT->ProcessLine(".L MiracleCoulomb.cpp+");
-    gROOT->ProcessLine(".L main.cpp+");
+    //gSystem->SetFlagsOpt("-O2");
+    //gSystem->SetFlagsDebug("-g");
+    //gSystem->SetIncludePath("-I/opt/homebrew/include -I/Users/glucia/Projects/CATS/DLM_glucia/install/include");
+    //
+    //gSystem->SetBuildDir("build", kTRUE);
+    //
+    //// Let ROOT handle standard paths
+    //gSystem->AddDynamicPath("/opt/homebrew/lib");
+    //gSystem->AddIncludePath("/opt/homebrew/include");
+    //
+    //gSystem->AddDynamicPath("/Users/glucia/Projects/CATS/DLM_glucia/install/CMake");
+    //gInterpreter->AddIncludePath("/Users/glucia/Projects/CATS/DLM_glucia/install/include");
+    //
+    //// Load libraries
+    //gSystem->Load("libCATS");
+    //gSystem->Load("libgsl");
+    //gSystem->Load("libgslcblas");
+    //gSystem->Load("libflint");
+    
+    // Compile
+    //gROOT->ProcessLine(".L MiracleCoulomb.cpp+");
+    //gROOT->ProcessLine(".L main.cpp+");
     gROOT->ProcessLine(".L CalcTheoCF2G_Free.C+");
-    gROOT->ProcessLine("main(0, nullptr)");
+    //gROOT->ProcessLine("main(0, nullptr)");
     gROOT->ProcessLine("CalcTheoCF2G_Free()");
-
-    //gROOT->ProcessLine("compare_potentials()");
-    //gROOT->ProcessLine("pd_double_gaussian()");
 }

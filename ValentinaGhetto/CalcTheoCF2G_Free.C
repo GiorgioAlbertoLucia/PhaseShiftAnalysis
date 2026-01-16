@@ -25,8 +25,13 @@ int rBins = 999; // the more the better, anyway it will stop on its own.
 
 // int Ref0Bins = 10;
 // int Imf0Bins = 6;
-std::vector<double> VectorValue_Ref0 = {{0.1, 0.2, 0.3, 0.4, 0.5}};
-std::vector<double> VectorValue_Imf0 = {{0.0, 0.2, 0.4, 0.6, 0.8, 1.0}};
+
+//std::vector<double> VectorValue_Ref0 = {{0.1, 0.2, 0.3, 0.4, 0.5}};
+//std::vector<double> VectorValue_Imf0 = {{0.0, 0.2, 0.4, 0.6, 0.8, 1.0}};
+
+std::vector<double> VectorValue_Ref0 = {{0.1, 0.2}};
+std::vector<double> VectorValue_Imf0 = {{0.0, 0.1, 0.2}};
+
 int Ref0Bins = VectorValue_Ref0.size();
 int Imf0Bins = VectorValue_Imf0.size();
 // SET THE FUCKING n
@@ -83,7 +88,7 @@ void CalcTheoCF2G_Free()
                 g[ii] = new TGraph();
                 g[ii] = CalcCF(SizeBinss[ii], Value_Ref0, Value_Imf0);
                 g[ii]->SetName(Form("g%.2f_aRe%.1f_aIm%.1f", SizeBinss[ii], Value_Ref0, Value_Imf0));
-                cout << "Graph Name" << g[ii]->GetName() << endl;
+                cout << "Graph Name: " << g[ii]->GetName() << endl;
                 g[ii]->Write();
             } // end loop radii
         }     // end loop Ref0
@@ -102,7 +107,8 @@ TGraph *CalcCF(float sourceSize, float Ref0, float Imf0)
     //===============
     char *FolderName;
     // FolderName = "/Users/sartozza/cernbox/Analysis/XiPi_Oton/LednickyCoulombCodes/Free_a0";
-    FolderName = "/Users/sartozza/cernbox/Analysis/XiPi_Oton/LednickyCoulombCodes/OutputMiracle";
+    //FolderName = "/Users/sartozza/cernbox/Analysis/XiPi_Oton/LednickyCoulombCodes/OutputMiracle";
+    FolderName = "/Users/glucia/Projects/PhaseShiftAnalysis/ValentinaGhetto/outputPiXi/";
 
     bool debug = false;
     FILE *InFile;

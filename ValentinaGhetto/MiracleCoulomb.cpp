@@ -261,7 +261,8 @@ int exec(int argc, char *argv[])
     
     // return 0;
 
-    TString OutputFolder = "/Users/sartozza/cernbox/Analysis/XiPi_Oton/LednickyCoulombCodes/OutputMiracle/";
+    //TString OutputFolder = "/Users/sartozza/cernbox/Analysis/XiPi_Oton/LednickyCoulombCodes/OutputMiracle/";
+    TString OutputFolder = "/Users/glucia/Projects/PhaseShiftAnalysis/ValentinaGhetto/outputPiXi/";
 
     double kmin = 5.;
     double kmax = 600; // 80.
