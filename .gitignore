@@ -45,3 +45,18 @@
 *.pcm
 *.d
 *.so
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CMakeScripts/
+Testing/
+
+# dat files
+*.dat
+
+# executables 
+ValentinaGhetto/main
+numerical_lednicky/build/*
