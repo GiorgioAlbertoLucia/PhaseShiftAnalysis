@@ -2,6 +2,7 @@
 #include <TCanvas.h>
 #include <TMultiGraph.h>
 #include <TGraph.h>
+#include <TGraphErrors.h>
 #include <TLegend.h>
 #include <iomanip>
 #include <TAxis.h>
@@ -16,7 +17,7 @@ void square_well_pHe3_fits() {
     // Create the square well object
     pHe3SquareWell sqwell;
     
-    // Experimental data
+    // Experimental targets from T.V. Daniels et al, PRC (2010)
     std::vector<double> q_exp = {48.706, 57.630, 69.941, 76.496};
     std::vector<std::vector<double>> delta_exp = {
         {-39.1, -48.7, -56.3, -67.8}, // L=0, S=0
@@ -24,6 +25,14 @@ void square_well_pHe3_fits() {
         {8.0, 13.4, 17.3, 21.2},      // L=1, S=0
         {15.4, 25.5, 34.1, 46.0}      // L=1, S=1
     };
+    std::vector<std::vector<double>> delta_exp_error = {
+        {1.7, 0.9, 0.6, 0.9}, // L=0, S=0
+        {0.7, 0.09, 0.5, 0.3}, // L=0, S=1
+        {2, 0.4, 1.6, 1.7},      // L=1, S=0
+        {6, 0.8, 0.9, 0.7}      // L=1, S=1
+    };
+
+    sqwell.LoadExperimentalData(q_exp, delta_exp, delta_exp_error);
     
     std::vector<std::string> channel_names = {
         "L=0, S=0 (singlet, s-wave)", 
@@ -42,7 +51,7 @@ void square_well_pHe3_fits() {
                   << channel_names[channel] << std::endl;
         std::cout << "Target phase shifts (deg):";
         for (size_t i = 0; i < q_exp.size(); i++) {
-            std::cout << " " << std::fixed << std::setprecision(1) << delta_exp[channel][i];
+            std::cout << " " << std::fixed << std::setprecision(1) << delta_exp[channel][i] << "±" << std::setprecision(1) << delta_exp_error[channel][i] << ",";
         }
         std::cout << std::endl;
         std::cout << "Starting fit with 1000 iterations..." << std::endl;
@@ -85,26 +94,29 @@ void square_well_pHe3_fits() {
     
     for (int channel = 0; channel < 4; channel++) {
         std::cout << "\n" << channel_names[channel] << ":" << std::endl;
-        std::cout << std::string(70, '-') << std::endl;
-        std::cout << "  q (MeV/c)  | δ_exp (deg) | δ_calc (deg) | Difference | % Error" << std::endl;
-        std::cout << std::string(70, '-') << std::endl;
+        std::cout << std::string(90, '-') << std::endl;
+        std::cout << "  q (MeV/c)  | δ_exp (deg) | δ_err (deg) | δ_calc (deg) | Difference | % Error "<< std::endl;
+        std::cout << std::string(90, '-') << std::endl;
         
         double total_error = 0.0;
+        double chi2 = 0.0;
         for (size_t i = 0; i < q_exp.size(); i++) {
             double delta_calc = sqwell.GetPhaseShift(channel, q_exp[i]) * 180.0 / Constants::PI;
             double diff = delta_calc - delta_exp[channel][i];
             double percent_error = 100.0 * std::abs(diff) / std::abs(delta_exp[channel][i]);
             total_error += diff * diff;
+            chi2 += diff * diff / (delta_exp_error[channel][i] * delta_exp_error[channel][i]);
             
             std::cout << "  " << std::fixed << std::setprecision(2) << std::setw(9) << q_exp[i] 
                       << "  | " << std::setw(11) << delta_exp[channel][i]
+                      << "  | " << std::setw(6) << delta_exp_error[channel][i]
                       << " | " << std::setw(12) << delta_calc
                       << " | " << std::setw(10) << diff
                       << " | " << std::setw(7) << std::setprecision(2) << percent_error << "%"
                       << std::endl;
         }
-        std::cout << std::string(70, '-') << std::endl;
-        std::cout << "  χ² = " << std::scientific << std::setprecision(3) << total_error << std::endl;
+        std::cout << std::string(90, '-') << std::endl;
+        std::cout << "  χ² = " << std::scientific << std::setprecision(3) << chi2 << std::endl;
     }
     
     // Save phase shifts to file
@@ -117,6 +129,9 @@ void square_well_pHe3_fits() {
     std::cout << "\n========================================" << std::endl;
     std::cout << "GENERATING PLOTS" << std::endl;
     std::cout << "========================================" << std::endl;
+
+    TCanvas* cIndivisuals = new TCanvas("cIndivisuals", "p-^{3}He Phase Shifts - Individual Channels", 1200, 900);
+    cIndivisuals->Print("output/pHe3_phase_shifts_individual_channels.pdf["); // Open multi-page PDF
     
     TCanvas* c1 = new TCanvas("c1", "p-^{3}He Phase Shifts", 1200, 900);
     c1->Divide(2, 2);
@@ -141,9 +156,10 @@ void square_well_pHe3_fits() {
         gr_theory->Draw("AL");
         
         // Experimental points
-        TGraph* gr_exp = new TGraph();
+        TGraphErrors* gr_exp = new TGraphErrors();
         for (size_t i = 0; i < q_exp.size(); i++) {
             gr_exp->SetPoint(i, q_exp[i], delta_exp[channel][i]);
+            gr_exp->SetPointError(i, 0, delta_exp_error[channel][i]);
         }
         gr_exp->SetMarkerStyle(20);
         gr_exp->SetMarkerSize(1.5);
@@ -163,11 +179,20 @@ void square_well_pHe3_fits() {
         leg->SetBorderSize(0);
         leg->SetFillStyle(0);
         leg->Draw();
+
+
+        cIndivisuals->cd();
+        gr_theory->Draw("AL");
+        gr_exp->Draw("P SAME");
+        leg->Draw();
+        cIndivisuals->Print("output/pHe3_phase_shifts_individual_channels.pdf"); // Add page to multi-page PDF
+        cIndivisuals->Clear();
     }
     
     c1->Update();
-    c1->SaveAs("output/pHe3_phase_shifts_comparison.pdf");
+    c1->Print("output/pHe3_phase_shifts_comparison.pdf");
     std::cout << "✓ Plots saved as PDF and PNG" << std::endl;
+    cIndivisuals->Print("output/pHe3_phase_shifts_individual_channels.pdf]"); // Close multi-page PDF
     
     // Also create a combined plot on one canvas
     TCanvas* c2 = new TCanvas("c2", "p-He3 All Phase Shifts", 1000, 700);
@@ -189,9 +214,10 @@ void square_well_pHe3_fits() {
         mg->Add(gr_theory, "L");
         
         // Experimental points
-        TGraph* gr_exp = new TGraph();
+        TGraphErrors* gr_exp = new TGraphErrors();
         for (size_t i = 0; i < q_exp.size(); i++) {
             gr_exp->SetPoint(i, q_exp[i], delta_exp[channel][i]);
+            gr_exp->SetPointError(i, 0, delta_exp_error[channel][i]);
         }
         gr_exp->SetMarkerStyle(20);
         gr_exp->SetMarkerSize(1.2);

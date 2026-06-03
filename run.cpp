@@ -29,11 +29,11 @@ void run() {
     //gROOT->ProcessLine(".L square_well_pHe3.cpp+");
     //gROOT->ProcessLine("square_well_pHe3()");
 
-    //gROOT->ProcessLine(".L square_well_pHe3_fits.cpp+");
-    //gROOT->ProcessLine("square_well_pHe3_fits()");
+    gROOT->ProcessLine(".L square_well_pHe3_fits.cpp+");
+    gROOT->ProcessLine("square_well_pHe3_fits()");
 
-    gROOT->ProcessLine(".L square_well_pd_fits.cpp+");
-    gROOT->ProcessLine("square_well_pd_fits()");
+    //gROOT->ProcessLine(".L square_well_pd_fits.cpp+");
+    //gROOT->ProcessLine("square_well_pd_fits()");
 
     //gROOT->ProcessLine(".L correlation_numerical.cpp+");
     //gROOT->ProcessLine("compare_potentials()");

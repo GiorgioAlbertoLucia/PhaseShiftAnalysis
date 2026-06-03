@@ -33,6 +33,10 @@ public:
     // Initialize phase shifts and wavefunctions
     void Initialize();
     
+    void LoadExperimentalData(const std::vector<double>& q_exp, 
+                              const std::vector<std::vector<double>>& delta_exp, 
+                              const std::vector<std::vector<double>>& delta_exp_error);
+
     // Get phase shift for specific channel and momentum
     double GetPhaseShift(int channel, double q) const;
     
@@ -66,6 +70,10 @@ private:
     // Momentum grid
     double q_max, dq;
     int n_q_points;
+
+    std::vector<double> m_q_exp;
+    std::vector<std::vector<double>> m_delta_exp;
+    std::vector<std::vector<double>> m_delta_exp_error;
     
     // Channel quantum numbers: L and S
     std::vector<int> L_values;
@@ -237,6 +245,14 @@ void pHe3SquareWell::Initialize() {
     ComputePhaseShiftsAllChannels();
 }
 
+void pHe3SquareWell::LoadExperimentalData(const std::vector<double>& q_exp, 
+                                      const std::vector<std::vector<double>>& delta_exp, 
+                                      const std::vector<std::vector<double>>& delta_exp_error) {
+    m_q_exp = q_exp;
+    m_delta_exp = delta_exp;
+    m_delta_exp_error = delta_exp_error;
+}
+
 void pHe3SquareWell::ComputePhaseShiftsAllChannels() {
     // Main loop over channels and momenta (following Pratt's SquareWell_Init)
     
@@ -343,20 +359,18 @@ double pHe3SquareWell::GetPhaseShift(int channel, double q) const {
 }
 
 void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int debug_level) {
-    // Experimental targets from T.V. Daniels et al, PRC (2010)
-    std::vector<double> q_targets, delta_targets;
     
-    q_targets = {48.706, 57.630, 69.941, 76.496};
-    if (channel == 0) {
-        delta_targets = {-39.1, -48.7, -56.3, -67.8};
-    } else if (channel == 1) {
-        delta_targets = {-34.5, -42.9, -49.3, -58.6};
-    } else if (channel == 2) {
-        delta_targets = {8.0, 13.4, 17.3, 21.2};
-    } else if (channel == 3) {
-        delta_targets = {15.4, 25.5, 34.1, 46.0};
+    std::vector<double> q_targets, delta_targets, delta_targets_errors;
+
+    if (m_delta_exp.size() < channel + 1) {
+        std::cerr << "Error: No experimental data loaded for channel 1" << std::endl;
+        return;
     }
     
+    q_targets = m_q_exp;
+    delta_targets = m_delta_exp[channel];
+    delta_targets_errors = m_delta_exp_error[channel];
+        
     double best_error = 1e99;
     std::vector<double> best_a = a[channel];
     std::vector<double> best_V = V0[channel];
@@ -384,7 +398,7 @@ void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int debug_l
             double delta_calc = GetPhaseShift(channel, q_targets[i]) * 180.0 / Constants::PI;
             if ((channel == 0 | channel == 1) && delta_calc > 0)
                 delta_calc -= 180;
-            error += std::pow(delta_calc - delta_targets[i], 2);
+            error += std::pow(delta_calc - delta_targets[i], 2) / std::pow(delta_targets_errors[i], 2);
         }
         
         if (error < best_error) {
