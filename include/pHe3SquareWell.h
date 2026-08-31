@@ -13,6 +13,7 @@
 #include <TCanvas.h>
 #include <TLegend.h>
 #include <TMultiGraph.h>
+#include <TMinuit.h>
 
 #include <gsl/gsl_sf_bessel.h>
 #include <gsl/gsl_sf_coulomb.h>
@@ -54,6 +55,8 @@ public:
     
     // Get potential parameters
     void GetParameters(int channel, std::vector<double>& a_vals, std::vector<double>& V_vals) const;
+
+    void GetParErrors(int channel, std::vector<double>& a_errs, std::vector<double>& V_errs) const;
     
     // Set potential parameters
     void SetParameters(int channel, const std::vector<double>& a_vals, const std::vector<double>& V_vals);
@@ -85,6 +88,9 @@ private:
     std::vector<int> n_wells_vec;
     std::vector<std::vector<double>> a;   // radii
     std::vector<std::vector<double>> V0;  // depths (MeV)
+    std::vector<std::vector<double>> a_errs; // errors in radii
+    std::vector<std::vector<double>> V_errs; // errors in depths (MeV)
+
     
     // Phase shifts: delta[channel][q_index]
     std::vector<std::vector<double>> delta;
@@ -94,6 +100,11 @@ private:
     
     // Coulomb phase factors
     std::vector<std::vector<std::complex<double>>> cgs_qwell;  // [iq][l]
+
+    // Minuit fitting state (static pointers for callback)
+    static pHe3SquareWell* s_fit_instance;
+    static int             s_fit_channel;
+    static void FCN(int& npar, double* grad, double& fval, double* par, int flag);
     
     // Helper functions
     void InitializeParameters();
@@ -128,7 +139,7 @@ pHe3SquareWell::pHe3SquareWell() {
     // Number of wells per channel
     n_wells_vec = {2, 2, 2, 2};
     
-    q_max = 100.0;  // MeV/c
+    q_max = 150.0;  // MeV/c
     dq = 1.0;       // MeV/c
     n_q_points = static_cast<int>(q_max / dq) + 1;
     
@@ -168,22 +179,33 @@ void pHe3SquareWell::InitializeArrays() {
 
 void pHe3SquareWell::InitializeParameters() {
     // From Scott Pratt's fitted values
+
+    a_errs.resize(n_channels);
+    V_errs.resize(n_channels);
     
     // L=0, S=0 (singlet)
     a[0] = {1.80628, 2.05664};
     V0[0] = {-2.71804, -114.483};
+    a_errs[0].resize(2);
+    V_errs[0].resize(2);
     
     // L=0, S=1 (triplet)
     a[1] = {0.835825, 1.10527};
     V0[1] = {-6.16757, -155.224};
-    
+    a_errs[1].resize(2);
+    V_errs[1].resize(2);
+
     // L=1, S=0 (singlet)
     a[2] = {1.10123, 6.55019};
     V0[2] = {11.5845, -1.51854};
+    a_errs[2].resize(2);
+    V_errs[2].resize(2);
     
     // L=1, S=1 (triplet)
     a[3] = {0.0956635, 5.23552};
     V0[3] = {31.0429, -4.76129};
+    a_errs[3].resize(2);
+    V_errs[3].resize(2);
 }
 
 // Complex gamma function
@@ -358,11 +380,92 @@ double pHe3SquareWell::GetPhaseShift(int channel, double q) const {
     return delta_value;
 }
 
+
+pHe3SquareWell* pHe3SquareWell::s_fit_instance = nullptr;
+int             pHe3SquareWell::s_fit_channel   = -1;
+
+void pHe3SquareWell::FCN(int& /*npar*/, double* /*grad*/, double& fval,
+                          double* par, int /*flag*/)
+{
+    pHe3SquareWell* sw = s_fit_instance;
+    int ch = s_fit_channel;
+
+    // Unpack parameters: [a0, a1, V0, V1]
+    sw->a[ch]  = { std::abs(par[0]), std::abs(par[1]) };
+    sw->V0[ch] = { par[2], par[3] };
+    sw->Initialize();
+
+    fval = 0.0;
+    for (size_t i = 0; i < sw->m_q_exp.size(); ++i) {
+        if (std::isnan(sw->m_delta_exp[ch][i])) continue;
+        double calc = sw->GetPhaseShift(ch, sw->m_q_exp[i]) * 180.0 / Constants::PI;
+        double diff = calc - sw->m_delta_exp[ch][i];
+        double err  = sw->m_delta_exp_error[ch][i];
+        fval += (err > 0) ? (diff * diff) / (err * err) : diff * diff;
+    }
+}
+
+void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int /*debug_level*/) {
+
+    if (static_cast<int>(m_delta_exp.size()) < channel + 1) {
+        std::cerr << "Error: No experimental data loaded for channel " << channel << std::endl;
+        return;
+    }
+
+    s_fit_instance = this;
+    s_fit_channel  = channel;
+
+    TMinuit minuit(4);
+    minuit.SetFCN(FCN);
+    minuit.SetPrintLevel(-1);  // quiet; set to 0 or 1 for more output
+
+    // Seed from current parameters
+    const auto& a0 = a[channel];
+    const auto& V  = V0[channel];
+
+    // DefineParameter(index, name, start, step, min, max)
+    minuit.DefineParameter(0, "a0", a0[0], 0.01,  0.01, 10.0);
+    minuit.DefineParameter(1, "a1", a0[1], 0.01,  0.01, 10.0);
+    minuit.DefineParameter(2, "V0", V[0],  0.5,  -500., 500.);
+    minuit.DefineParameter(3, "V1", V[1],  0.5,  -500., 500.);
+
+    // MIGRAD for minimisation, then IMPROVE + MINOS for error estimation
+    double arglist[2] = { static_cast<double>(n_iterations), 1e-6 };
+    int ierr = 0;
+    minuit.mnexcm("MIGRAD",  arglist, 2, ierr);
+    minuit.mnexcm("IMPROVE", arglist, 1, ierr);
+
+    // Retrieve best-fit parameters
+    double val, err;
+    for (int i = 0; i < 4; i++) {
+        minuit.GetParameter(i, val, err);
+        if (i < 2) {
+            a[channel][i]  = std::abs(val);
+            a_errs[channel][i] = err;
+        } else {
+            V0[channel][i-2] = val;
+            V_errs[channel][i-2] = err;
+        }
+    }
+
+    // Print result
+    double fmin, fedm, errdef;
+    int    nvpar, nparx, istat;
+    minuit.mnstat(fmin, fedm, errdef, nvpar, nparx, istat);
+    std::cout << "  χ²_min = " << fmin
+              << "  (status " << istat << ")\n";
+    std::cout << "  a = {" << a[channel][0] << ", " << a[channel][1] << "} fm\n";
+    std::cout << "  V = {" << V0[channel][0] << ", " << V0[channel][1] << "} MeV\n";
+
+    Initialize();
+}
+
+/* --- Scott Pratt's original random search method (replaced by Minuit) ---
 void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int debug_level) {
     
     std::vector<double> q_targets, delta_targets, delta_targets_errors;
 
-    if (m_delta_exp.size() < channel + 1) {
+    if (static_cast<int>(m_delta_exp.size()) < channel + 1) {
         std::cerr << "Error: No experimental data loaded for channel 1" << std::endl;
         return;
     }
@@ -452,6 +555,7 @@ void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int debug_l
     V0[channel] = best_V;
     Initialize();
 }
+*/
 
 void pHe3SquareWell::PrintPhaseShifts(const std::string& filename) const {
 
@@ -517,6 +621,12 @@ void pHe3SquareWell::GetParameters(int channel, std::vector<double>& a_vals,
                                    std::vector<double>& V_vals) const {
     a_vals = a[channel];
     V_vals = V0[channel];
+}
+
+void pHe3SquareWell::GetParErrors(int channel, std::vector<double>& a_errs_out, 
+                                   std::vector<double>& V_errs_out) const {
+    a_errs_out = a_errs[channel];
+    V_errs_out = V_errs[channel];
 }
 
 void pHe3SquareWell::SetParameters(int channel, const std::vector<double>& a_vals, 
