@@ -1,247 +1,269 @@
 #include "include/pHe3SquareWell.h"
+#include "input/phase_shift_data.h"
+
 #include <TCanvas.h>
 #include <TMultiGraph.h>
 #include <TGraph.h>
 #include <TGraphErrors.h>
 #include <TLegend.h>
-#include <iomanip>
+#include <TLorentzVector.h>
+#include <TVector3.h>
 #include <TAxis.h>
+#include <TFile.h>
 
+#include <iomanip>
+#include <set>
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+static const double M_PROTON  = 938.2720813;   // MeV/c²
+static const double M_HE3     = 2808.391383;   // MeV/c²
+static const std::string OUTPUT_NAME = "pHe3_phase_shifts_fitted_third_table";
+
+// ─── Kinematics ──────────────────────────────────────────────────────────────
+// Convert lab kinetic energy (MeV) → CM momentum k* (MeV/c)
+double ELabToKstar(double T_lab) {
+    double p_lab = std::sqrt(T_lab * T_lab + 2.0 * T_lab * M_PROTON);
+    TLorentzVector beam(0, 0, p_lab, std::sqrt(p_lab*p_lab + M_PROTON*M_PROTON));
+    TLorentzVector target(0, 0, 0, M_HE3);
+    TLorentzVector total = beam + target;
+    TVector3 boost = total.BoostVector();
+    beam.Boost(-boost);
+    return beam.P();
+}
+
+// ─── Data loading ────────────────────────────────────────────────────────────
+// Spectroscopic label → channel index: 1S0→0, 3S1→1, 3P0→2, 3P1→3
+static const std::map<std::string, int> CHANNEL_MAP = {
+    {"1S0", 0}, {"3S1", 1}, {"3P0", 2}, {"3P1", 3}
+};
+
+// Merge data points from all three tables into per-channel vectors
+void LoadAllData(std::vector<double>& q_merged,
+                 std::vector<std::vector<double>>& delta_merged,
+                 std::vector<std::vector<double>>& error_merged)
+{
+    q_merged.clear();
+    delta_merged.assign(4, {});
+    error_merged.assign(4, {});
+
+    // Collect all unique k* values across relevant channels
+    std::set<double> kstar_set;
+    auto collectFrom = [&](const std::map<std::string, std::vector<DataPoint>>& table) {
+        for (auto& [label, points] : table) {
+            if (CHANNEL_MAP.count(label) == 0) continue;
+            for (auto& dp : points) kstar_set.insert(ELabToKstar(dp.energy_mev));
+        }
+    };
+    // collectFrom(TABLE_15_14_23);
+    // collectFrom(TABLE_15_16_40);
+    collectFrom(TABLE_15_17_51);
+
+    q_merged.assign(kstar_set.begin(), kstar_set.end()); // already sorted
+    delta_merged.assign(4, std::vector<double>(q_merged.size(), std::numeric_limits<double>::quiet_NaN()));
+    error_merged.assign(4, std::vector<double>(q_merged.size(), 0.0));
+
+    auto fillFrom = [&](const std::map<std::string, std::vector<DataPoint>>& table) {
+        for (auto& [label, points] : table) {
+            auto it = CHANNEL_MAP.find(label);
+            if (it == CHANNEL_MAP.end()) continue;
+            int ch = it->second;
+            for (auto& dp : points) {
+                double kstar = ELabToKstar(dp.energy_mev);
+                auto pos = std::lower_bound(q_merged.begin(), q_merged.end(), kstar);
+                size_t idx = std::distance(q_merged.begin(), pos);
+                delta_merged[ch][idx] = dp.value;
+                error_merged[ch][idx] = dp.error;
+            }
+        }
+    };
+    // fillFrom(TABLE_15_14_23);
+    // fillFrom(TABLE_15_16_40);
+    fillFrom(TABLE_15_17_51);
+}
+
+// ─── Plotting ────────────────────────────────────────────────────────────────
+static const int   COLORS[4]       = {kBlue, kRed, kGreen+2, kMagenta};
+static const char* CHANNEL_NAMES[4] = {
+    "L=0, S=0 (^{1}S_{0})", "L=0, S=1 (^{3}S_{1})",
+    "L=1, S=0 (^{3}P_{0})", "L=1, S=1 (^{3}P_{1})"
+};
+
+TGraph* MakeTheoryCurve(pHe3SquareWell& sw, int ch, int color) {
+    TGraph* gr = new TGraph();
+    for (int i = 0; i < 230; ++i) {
+        double q = i * 0.5;
+        gr->SetPoint(i, q, sw.GetPhaseShift(ch, q) * 180.0 / Constants::PI);
+    }
+    gr->SetLineColor(color);
+    gr->SetLineWidth(3);
+    return gr;
+}
+
+TGraphErrors* MakeExpGraph(const std::vector<double>& q,
+                           const std::vector<double>& delta,
+                           const std::vector<double>& err, int color)
+{
+    TGraphErrors* gr = new TGraphErrors();
+    int n = 0;
+    for (size_t i = 0; i < q.size(); ++i) {
+        if (std::isnan(delta[i])) continue;
+        gr->SetPoint(n, q[i], delta[i]);
+        gr->SetPointError(n, 0, err[i]);
+        ++n;
+    }
+    gr->SetMarkerStyle(20);
+    gr->SetMarkerSize(1.2);
+    gr->SetMarkerColor(color);
+    gr->SetLineColor(color);
+    return gr;
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 void square_well_pHe3_fits() {
-    
-    std::cout << "=== p-He3 Square Well Potential Analysis ===" << std::endl;
-    std::cout << "Fitting parameters to experimental phase shifts" << std::endl;
-    std::cout << "Data from T.V. Daniels et al, PRC 82, 034002 (2010)" << std::endl;
-    std::cout << std::endl;
-    
-    // Create the square well object
+
+    // --- Load & convert experimental data ---
+    std::vector<double> q_all;
+    std::vector<std::vector<double>> delta_all, error_all;
+    LoadAllData(q_all, delta_all, error_all);
+
     pHe3SquareWell sqwell;
-    
-    // Experimental targets from T.V. Daniels et al, PRC (2010)
-    std::vector<double> q_exp = {48.706, 57.630, 69.941, 76.496};
-    std::vector<std::vector<double>> delta_exp = {
-        {-39.1, -48.7, -56.3, -67.8}, // L=0, S=0
-        {-34.5, -42.9, -49.3, -58.6}, // L=0, S=1
-        {8.0, 13.4, 17.3, 21.2},      // L=1, S=0
-        {15.4, 25.5, 34.1, 46.0}      // L=1, S=1
-    };
-    std::vector<std::vector<double>> delta_exp_error = {
-        {1.7, 0.9, 0.6, 0.9}, // L=0, S=0
-        {0.7, 0.09, 0.5, 0.3}, // L=0, S=1
-        {2, 0.4, 1.6, 1.7},      // L=1, S=0
-        {6, 0.8, 0.9, 0.7}      // L=1, S=1
-    };
+    sqwell.LoadExperimentalData(q_all, delta_all, error_all);
 
-    sqwell.LoadExperimentalData(q_exp, delta_exp, delta_exp_error);
-    
-    std::vector<std::string> channel_names = {
-        "L=0, S=0 (singlet, s-wave)", 
-        "L=0, S=1 (triplet, s-wave)", 
-        "L=1, S=0 (singlet, p-wave)", 
-        "L=1, S=1 (triplet, p-wave)"
-    };
-    
-    // Fit all channels
-    std::cout << "========================================" << std::endl;
-    std::cout << "FITTING ALL CHANNELS" << std::endl;
-    std::cout << "========================================" << std::endl;
-    
-    for (int channel = 0; channel < 4; channel++) {
-        std::cout << "\n>>> Fitting Channel " << channel << ": " 
-                  << channel_names[channel] << std::endl;
-        std::cout << "Target phase shifts (deg):";
-        for (size_t i = 0; i < q_exp.size(); i++) {
-            std::cout << " " << std::fixed << std::setprecision(1) << delta_exp[channel][i] << "±" << std::setprecision(1) << delta_exp_error[channel][i] << ",";
-        }
-        std::cout << std::endl;
-        std::cout << "Starting fit with 1000 iterations..." << std::endl;
-        std::cout << std::string(60, '-') << std::endl;
-        
-        sqwell.FitToPhaseShifts(channel, 1000);
-        
-        std::cout << std::string(60, '-') << std::endl;
-        std::cout << "✓ Fit completed for channel " << channel << std::endl;
+    // --- Fit all channels ---
+    std::cout << "=== p-He3 Square Well Potential Analysis ===\n\n";
+    for (int ch = 0; ch < 4; ++ch) {
+        std::cout << "Fitting channel " << ch << ": " << CHANNEL_NAMES[ch] << "\n";
+        sqwell.FitToPhaseShifts(ch, 1000);
+        std::cout << "  ✓ Done\n";
     }
-    
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "FINAL FITTED PARAMETERS" << std::endl;
-    std::cout << "========================================" << std::endl;
-    
-    for (int channel = 0; channel < 4; channel++) {
-        std::vector<double> a_vals, V_vals;
-        sqwell.GetParameters(channel, a_vals, V_vals);
-        
-        std::cout << "\nChannel " << channel << " (" << channel_names[channel] << "):" << std::endl;
-        std::cout << "  Radii (fm):  a = {";
-        for (size_t i = 0; i < a_vals.size(); i++) {
-            std::cout << std::fixed << std::setprecision(6) << a_vals[i];
-            if (i < a_vals.size() - 1) std::cout << ", ";
-        }
-        std::cout << "}" << std::endl;
-        
-        std::cout << "  Depths (MeV): V = {";
-        for (size_t i = 0; i < V_vals.size(); i++) {
-            std::cout << std::fixed << std::setprecision(4) << V_vals[i];
-            if (i < V_vals.size() - 1) std::cout << ", ";
-        }
-        std::cout << "}" << std::endl;
-    }
-    
-    // Detailed comparison with experimental data
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "COMPARISON WITH EXPERIMENTAL DATA" << std::endl;
-    std::cout << "========================================" << std::endl;
-    
-    for (int channel = 0; channel < 4; channel++) {
-        std::cout << "\n" << channel_names[channel] << ":" << std::endl;
-        std::cout << std::string(90, '-') << std::endl;
-        std::cout << "  q (MeV/c)  | δ_exp (deg) | δ_err (deg) | δ_calc (deg) | Difference | % Error "<< std::endl;
-        std::cout << std::string(90, '-') << std::endl;
-        
-        double total_error = 0.0;
-        double chi2 = 0.0;
-        for (size_t i = 0; i < q_exp.size(); i++) {
-            double delta_calc = sqwell.GetPhaseShift(channel, q_exp[i]) * 180.0 / Constants::PI;
-            double diff = delta_calc - delta_exp[channel][i];
-            double percent_error = 100.0 * std::abs(diff) / std::abs(delta_exp[channel][i]);
-            total_error += diff * diff;
-            chi2 += diff * diff / (delta_exp_error[channel][i] * delta_exp_error[channel][i]);
-            
-            std::cout << "  " << std::fixed << std::setprecision(2) << std::setw(9) << q_exp[i] 
-                      << "  | " << std::setw(11) << delta_exp[channel][i]
-                      << "  | " << std::setw(6) << delta_exp_error[channel][i]
-                      << " | " << std::setw(12) << delta_calc
-                      << " | " << std::setw(10) << diff
-                      << " | " << std::setw(7) << std::setprecision(2) << percent_error << "%"
-                      << std::endl;
-        }
-        std::cout << std::string(90, '-') << std::endl;
-        std::cout << "  χ² = " << std::scientific << std::setprecision(3) << chi2 << std::endl;
-    }
-    
-    // Save phase shifts to file
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "Saving complete phase shift data to 'pHe3_phase_shifts_fitted.dat'..." << std::endl;
-    sqwell.PrintPhaseShifts("output/pHe3_phase_shifts_fitted.dat");
-    std::cout << "✓ Data saved" << std::endl;
-    
-    // Create comprehensive plot with experimental data
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "GENERATING PLOTS" << std::endl;
-    std::cout << "========================================" << std::endl;
 
-    TCanvas* cIndivisuals = new TCanvas("cIndivisuals", "p-^{3}He Phase Shifts - Individual Channels", 1200, 900);
-    cIndivisuals->Print("output/pHe3_phase_shifts_individual_channels.pdf["); // Open multi-page PDF
-    
+    // --- Print fitted parameters ---
+    std::cout << "\n=== Fitted Parameters ===\n";
+    for (int ch = 0; ch < 4; ++ch) {
+        std::vector<double> a, V;
+        std::vector<double> a_errs, V_errs;
+        sqwell.GetParameters(ch, a, V);
+        sqwell.GetParErrors(ch, a_errs, V_errs);
+        std::cout << CHANNEL_NAMES[ch] << "\n";
+        std::cout << "  a (fm): ";
+        for (int i = 0; i < static_cast<int>(a.size()); ++i) {
+            std::cout << std::fixed << std::setprecision(6) << a[i] << " ± " << a_errs[i] << ",  ";
+        }
+        std::cout << "\n  V (MeV): ";
+        for (int i = 0; i < static_cast<int>(V.size()); ++i) {
+            std::cout << std::fixed << std::setprecision(4) << V[i] << " ± " << V_errs[i] << ",  ";
+        }
+        std::cout << "\n";
+    }
+
+    // --- χ² summary table ---
+    std::cout << "\n=== Comparison with Data ===\n";
+    for (int ch = 0; ch < 4; ++ch) {
+        std::cout << "\n" << CHANNEL_NAMES[ch] << "\n";
+        std::cout << std::string(80, '-') << "\n";
+        std::cout << "  k* (MeV/c) | δ_exp (°) | δ_err (°) | δ_calc (°) | Δ (°)  | χ²_i\n";
+        std::cout << std::string(80, '-') << "\n";
+        double chi2 = 0;
+        for (size_t i = 0; i < q_all.size(); ++i) {
+            if (std::isnan(delta_all[ch][i])) continue;
+            double calc = sqwell.GetPhaseShift(ch, q_all[i]) * 180.0 / Constants::PI;
+            double diff = calc - delta_all[ch][i];
+            double chi2i = error_all[ch][i] > 0 ? diff*diff / (error_all[ch][i]*error_all[ch][i]) : 0;
+            chi2 += chi2i;
+            std::cout << std::fixed << std::setprecision(2)
+                      << "  " << std::setw(10) << q_all[i]
+                      << " | " << std::setw(9) << delta_all[ch][i]
+                      << " | " << std::setw(9) << error_all[ch][i]
+                      << " | " << std::setw(10) << calc
+                      << " | " << std::setw(6) << diff
+                      << " | " << std::setw(6) << chi2i << "\n";
+        }
+        std::cout << std::string(80, '-') << "\n";
+        std::cout << "  Total χ² = " << std::scientific << std::setprecision(3) << chi2 << "\n";
+    }
+
+    // --- Save data ---
+    sqwell.PrintPhaseShifts(std::string("output/") + OUTPUT_NAME + std::string(".dat"));
+    std::cout << "\n✓ Phase shifts saved\n";
+
+    // --- Open ROOT output file ---
+    TFile* outFile = new TFile((std::string("output/") + OUTPUT_NAME + std::string(".root")).c_str(), "RECREATE");
+
+    // --- 4-panel plot ---
     TCanvas* c1 = new TCanvas("c1", "p-^{3}He Phase Shifts", 1200, 900);
     c1->Divide(2, 2);
-    
-    int colors[4] = {kBlue, kRed, kGreen+2, kMagenta};
-    
-    for (int channel = 0; channel < 4; channel++) {
-        c1->cd(channel + 1);
-        
-        // Theory (smooth curve)
-        TGraph* gr_theory = new TGraph();
-        for (int iq = 0; iq < 100; iq++) {
-            double q = iq * 1.0;
-            double phase = sqwell.GetPhaseShift(channel, q) * 180.0 / Constants::PI;
-            gr_theory->SetPoint(iq, q, phase);
-        }
-        gr_theory->SetLineColor(colors[channel]);
-        gr_theory->SetLineWidth(3);
-        gr_theory->SetTitle(channel_names[channel].c_str());
-        gr_theory->GetXaxis()->SetTitle("#it{k}* (MeV/#it{c})");
-        gr_theory->GetYaxis()->SetTitle("#delta (degrees)");
-        gr_theory->Draw("AL");
-        
-        // Experimental points
-        TGraphErrors* gr_exp = new TGraphErrors();
-        for (size_t i = 0; i < q_exp.size(); i++) {
-            gr_exp->SetPoint(i, q_exp[i], delta_exp[channel][i]);
-            gr_exp->SetPointError(i, 0, delta_exp_error[channel][i]);
-        }
-        gr_exp->SetMarkerStyle(20);
-        gr_exp->SetMarkerSize(1.5);
-        gr_exp->SetMarkerColor(kBlack);
-        gr_exp->SetLineColor(kBlack);
+    for (int ch = 0; ch < 4; ++ch) {
+        c1->cd(ch + 1);
+        TGraph*       gr_th  = MakeTheoryCurve(sqwell, ch, COLORS[ch]);
+        TGraphErrors* gr_exp = MakeExpGraph(q_all, delta_all[ch], error_all[ch], kBlack);
+        gr_th->SetTitle(CHANNEL_NAMES[ch]);
+        gr_th->GetXaxis()->SetTitle("#it{k}* (MeV/#it{c})");
+        gr_th->GetYaxis()->SetTitle("#delta (degrees)");
+        gr_th->Draw("AL");
         gr_exp->Draw("P SAME");
-        
-        // Legend
-        std::array<double, 4> leg_pos = {0.15, 0.70, 0.45, 0.85};
-        if (channel == 0 | channel == 1) {
-            leg_pos[0] = 0.55;  leg_pos[2] = 0.85;
-            leg_pos[1] = 0.70;  leg_pos[4] = 0.85;
-        }
-        TLegend* leg = new TLegend(leg_pos[0], leg_pos[1], leg_pos[2], leg_pos[3]);
-        leg->AddEntry(gr_theory, "Fit", "l");
-        leg->AddEntry(gr_exp, "Daniels et al. (2010)", "p");
-        leg->SetBorderSize(0);
-        leg->SetFillStyle(0);
+        bool phase_negative = (ch < 2);
+        TLegend* leg = new TLegend(phase_negative ? 0.55 : 0.15, 0.70, phase_negative ? 0.85 : 0.45, 0.85);
+        leg->AddEntry(gr_th,  "Fit",           "l");
+        leg->AddEntry(gr_exp, "Data (merged)", "p");
+        leg->SetBorderSize(0); leg->SetFillStyle(0);
         leg->Draw();
 
-
-        cIndivisuals->cd();
-        gr_theory->Draw("AL");
-        gr_exp->Draw("P SAME");
-        leg->Draw();
-        cIndivisuals->Print("output/pHe3_phase_shifts_individual_channels.pdf"); // Add page to multi-page PDF
-        cIndivisuals->Clear();
+        // Save graphs into per-channel directory
+        TDirectory* dir = outFile->mkdir(Form("channel_%d", ch), CHANNEL_NAMES[ch]);
+        dir->cd();
+        gr_th ->SetName("theory");
+        gr_exp->SetName("experiment");
+        gr_th ->Write();
+        gr_exp->Write();
+        outFile->cd();
     }
-    
-    c1->Update();
-    c1->Print("output/pHe3_phase_shifts_comparison.pdf");
-    std::cout << "✓ Plots saved as PDF and PNG" << std::endl;
-    cIndivisuals->Print("output/pHe3_phase_shifts_individual_channels.pdf]"); // Close multi-page PDF
-    
-    // Also create a combined plot on one canvas
-    TCanvas* c2 = new TCanvas("c2", "p-He3 All Phase Shifts", 1000, 700);
-    TMultiGraph* mg = new TMultiGraph();
-    TLegend* leg2 = new TLegend(0.15, 0.15, 0.38, 0.40);
-    leg2->SetBorderSize(0);
-    leg2->SetFillStyle(1001);
-    
-    for (int channel = 0; channel < 4; channel++) {
-        // Theory curves
-        TGraph* gr_theory = new TGraph();
-        for (int iq = 0; iq < 100; iq++) {
-            double q = iq * 1.0;
-            double phase = sqwell.GetPhaseShift(channel, q) * 180.0 / Constants::PI;
-            gr_theory->SetPoint(iq, q, phase);
-        }
-        gr_theory->SetLineColor(colors[channel]);
-        gr_theory->SetLineWidth(3);
-        mg->Add(gr_theory, "L");
-        
-        // Experimental points
-        TGraphErrors* gr_exp = new TGraphErrors();
-        for (size_t i = 0; i < q_exp.size(); i++) {
-            gr_exp->SetPoint(i, q_exp[i], delta_exp[channel][i]);
-            gr_exp->SetPointError(i, 0, delta_exp_error[channel][i]);
-        }
-        gr_exp->SetMarkerStyle(20);
-        gr_exp->SetMarkerSize(1.2);
-        gr_exp->SetMarkerColor(colors[channel]);
-        gr_exp->SetLineColor(colors[channel]);
+    c1->Print((std::string("output/") + OUTPUT_NAME + std::string("_phase_shifts_comparison.pdf")).c_str());
+    outFile->cd();
+    c1->Write("canvas_4panel");
+
+    // --- Multi-page individual channel PDF ---
+    TCanvas* cInd = new TCanvas("cInd", "Individual Channels", 1200, 900);
+    cInd->Print((std::string("output/") + OUTPUT_NAME + std::string("_phase_shifts_individual.pdf")).c_str());
+    for (int ch = 0; ch < 4; ++ch) {
+        TDirectory* dir = outFile->GetDirectory(Form("channel_%d", ch));
+        TGraph*       gr_th  = MakeTheoryCurve(sqwell, ch, COLORS[ch]);
+        TGraphErrors* gr_exp = MakeExpGraph(q_all, delta_all[ch], error_all[ch], kBlack);
+        gr_th->SetTitle(CHANNEL_NAMES[ch]);
+        gr_th->GetXaxis()->SetTitle("#it{k}* (MeV/#it{c})");
+        gr_th->GetYaxis()->SetTitle("#delta (degrees)");
+        gr_th->Draw("AL");
+        gr_exp->Draw("P SAME");
+        cInd->Print((std::string("output/") + OUTPUT_NAME + std::string("_phase_shifts_individual.pdf")).c_str());
+
+        dir->cd();
+        cInd->SetName(Form("canvas_channel_%d", ch));
+        cInd->Write();
+        outFile->cd();
+        cInd->Clear();
+    }
+    cInd->Print((std::string("output/") + OUTPUT_NAME + std::string("_phase_shifts_individual.pdf")).c_str());
+
+    // --- Combined overlay plot ---
+    TCanvas* c2  = new TCanvas("c2", "All Channels", 1000, 700);
+    TMultiGraph* mg   = new TMultiGraph();
+    TLegend*     leg2 = new TLegend(0.15, 0.15, 0.38, 0.45);
+    leg2->SetBorderSize(0); leg2->SetFillStyle(1001);
+    for (int ch = 0; ch < 4; ++ch) {
+        TGraph*       gr_th  = MakeTheoryCurve(sqwell, ch, COLORS[ch]);
+        TGraphErrors* gr_exp = MakeExpGraph(q_all, delta_all[ch], error_all[ch], COLORS[ch]);
+        mg->Add(gr_th,  "L");
         mg->Add(gr_exp, "P");
-        
-        leg2->AddEntry(gr_theory, channel_names[channel].c_str(), "lp");
+        leg2->AddEntry(gr_th, CHANNEL_NAMES[ch], "lp");
     }
-    
     mg->Draw("A");
-    mg->SetTitle("p-He3 Phase Shifts: Fitted Theory vs Experimental Data; #it{k}* (MeV/#it{c});#delta (degrees)");
+    mg->SetTitle("p-^{3}He Phase Shifts;#it{k}* (MeV/#it{c});#delta (degrees)");
     leg2->Draw();
-    
-    c2->Update();
-    c2->SaveAs("output/pHe3_all_phase_shifts.pdf");
-    std::cout << "✓ Combined plot saved" << std::endl;
-    
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "ANALYSIS COMPLETE" << std::endl;
-    std::cout << "========================================" << std::endl;
-    std::cout << "\nGenerated files:" << std::endl;
-    std::cout << "  - pHe3_phase_shifts_fitted.dat (numerical data)" << std::endl;
-    std::cout << "  - output/pHe3_phase_shifts_comparison.pdf/png (4-panel plot)" << std::endl;
-    std::cout << "  - output/pHe3_all_phase_shifts.pdf/png (combined plot)" << std::endl;
-    std::cout << "\nClose the plot windows to exit." << std::endl;
+    c2->Print((std::string("output/") + OUTPUT_NAME + std::string("_all_phase_shifts.pdf")).c_str());
+    outFile->cd();
+    c2->Write("canvas_all_channels");
+
+    outFile->Close();
+    std::cout << "\n✓ All plots saved. ROOT file written to output/pHe3_phase_shifts_fitted.root\n";
+    std::cout << "  Structure: channel_0..3/ (theory, experiment, canvas_channel_N)\n";
+    std::cout << "             canvas_4panel, canvas_all_channels\n";
 }
