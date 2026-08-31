@@ -16,7 +16,7 @@ void run() {
     gSystem->Load("/usr/lib/x86_64-linux-gnu/libgslcblas.so");
     
     // Set include path for both compilation and dictionary generation
-    gInterpreter->AddIncludePath("/home/galucia/boost_1_90_0");
+    gInterpreter->AddIncludePath("/home/galucia/boost_1_89_0");
     gInterpreter->AddIncludePath("/home/galucia/eigen");
     
     // Compile and load
@@ -31,6 +31,9 @@ void run() {
 
     gROOT->ProcessLine(".L square_well_pHe3_fits.cpp+");
     gROOT->ProcessLine("square_well_pHe3_fits()");
+
+    //gROOT->ProcessLine(".L double_gaus_pHe3_fits.cpp+");
+    //gROOT->ProcessLine("double_gaus_pHe3_fits()");
 
     //gROOT->ProcessLine(".L square_well_pd_fits.cpp+");
     //gROOT->ProcessLine("square_well_pd_fits()");
