@@ -56,6 +56,8 @@ Testing/
 
 # dat files
 *.dat
+*.root
+*.pdf
 
 # executables 
 ValentinaGhetto/main
