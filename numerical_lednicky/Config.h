@@ -41,7 +41,7 @@ struct CalculationConfig {
     // Scattering parameters
     std::vector<double> realScatteringLengths;
     std::vector<double> imagScatteringLengths;
-    double effectiveRange = 0.0;
+    std::vector<double> effectiveRanges;
     
     // Particle properties
     ParticleProperties particle1;
@@ -51,6 +51,9 @@ struct CalculationConfig {
     std::string outputFolder;
     std::string outputRootFolder;
     std::string outputRootFile;
+
+    bool useDatFiles = false;
+    std::string intermediateRootFile = "Cky_intermediate.root";
     
     int GetNumKBins() const { return static_cast<int>((kMax - kMin) / kBinWidth); }
     int GetNumRBins() const { return static_cast<int>((rMax - rMin) / rBinWidth); }

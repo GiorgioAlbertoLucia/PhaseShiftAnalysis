@@ -6,11 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
 find_package(ROOT REQUIRED COMPONENTS Core Graf)
+set(CMAKE_PREFIX_PATH "/home/galucia/.local" ${CMAKE_PREFIX_PATH})
 find_package(GSL REQUIRED)
+find_package(OpenMP REQUIRED)
 
 # CATS library paths
-set(CATS_BASE_DIR "/Users/glucia/Projects/CATS/DLM_glucia/install")
-set(CATS_LIB_DIR "${CATS_BASE_DIR}/CMake")  # Library is directly in CMake directory
+set(CATS_BASE_DIR "/home/galucia/DLM/install")
+set(CATS_LIB_DIR "${CATS_BASE_DIR}/lib")  # Library is directly in CMake directory
 set(CATS_INCLUDE_DIR "${CATS_BASE_DIR}/include")
 
 # Find CATS library
@@ -30,19 +32,28 @@ endif()
 
 # FLINT library paths (adjust if installed in a different location)
 # Common locations: /usr/local, /opt/homebrew (macOS), /usr
+
+set(FLINT_ROOT "/home/galucia/flint")
+
 find_library(FLINT_LIB flint 
-    PATHS 
+    PATHS
+    ${FLINT_ROOT}
     /usr/local/lib
     /opt/homebrew/lib
     /usr/lib
+    /home/galucia
+    /home/galucia/flint
     REQUIRED
 )
 
-find_path(FLINT_INCLUDE_DIR flint/flint.h
+find_path(FLINT_INCLUDE_DIR flint.h
+    #flint/flint.h 
     PATHS
+    ${FLINT_ROOT}/src
     /usr/local/include
     /opt/homebrew/include
     /usr/include
+    /home/galucia
     REQUIRED
 )
 
@@ -82,14 +93,16 @@ set(SOURCES
 add_executable(correlation_calc ${SOURCES})
 
 # Link libraries
+# Link libraries
+link_directories(/home/galucia/.local/lib)
 target_link_libraries(correlation_calc
     ${ROOT_LIBRARIES}
     ${GSL_LIBRARIES}
     ${FLINT_LIB}
     ${GMP_LIB}
     ${CATS_LIB}
+    OpenMP::OpenMP_CXX
 )
-
 # Compiler flags
 target_compile_options(correlation_calc PRIVATE
     -Wall

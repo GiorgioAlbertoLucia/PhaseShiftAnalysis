@@ -35,6 +35,17 @@ The program now accepts command-line arguments for customization:
                    --particle2-charge -1.0
 ```
 
+For parallel computing with openMP, declare the variable first:
+```bash
+OMP_NUM_THREADS={N_JOBS} ./correlation_calc --mode both \
+                                            --output-folder ./my_output/ \
+                                            --output-root results.root \
+                                            --particle1-mass 139.57 \
+                                            --particle1-charge -1.0 \
+                                            --particle2-mass 1321.71 \
+                                            --particle2-charge -1.0
+```
+
 ### 3. **Clean Configuration System**
 - Default configurations via `DefaultConfigs::GetXiPiConfig()`
 - Easy to add new particle systems
@@ -52,7 +63,7 @@ The program now accepts command-line arguments for customization:
 ```bash
 mkdir build
 cd build
-cmake ..
+cmake -B build -DGLS_ROOT=/path/to/your/gsl/installation
 make
 ```
 
