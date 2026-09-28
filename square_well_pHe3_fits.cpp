@@ -54,8 +54,8 @@ void LoadAllData(std::vector<double>& q_merged,
             for (auto& dp : points) kstar_set.insert(ELabToKstar(dp.energy_mev));
         }
     };
-    // collectFrom(TABLE_15_14_23);
-    // collectFrom(TABLE_15_16_40);
+    collectFrom(TABLE_15_14_23);
+    collectFrom(TABLE_15_16_40);
     collectFrom(TABLE_15_17_51);
 
     q_merged.assign(kstar_set.begin(), kstar_set.end()); // already sorted
@@ -76,8 +76,8 @@ void LoadAllData(std::vector<double>& q_merged,
             }
         }
     };
-    // fillFrom(TABLE_15_14_23);
-    // fillFrom(TABLE_15_16_40);
+    fillFrom(TABLE_15_14_23);
+    fillFrom(TABLE_15_16_40);
     fillFrom(TABLE_15_17_51);
 }
 

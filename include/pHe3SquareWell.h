@@ -7,13 +7,14 @@
 #include <fstream>
 #include <string>
 
-#include <TRandom3.h>
-#include <TMath.h>
-#include <TGraph.h>
 #include <TCanvas.h>
+#include <TGraph.h>
 #include <TLegend.h>
-#include <TMultiGraph.h>
+#include <TMath.h>
+#include <TMatrixD.h>
 #include <TMinuit.h>
+#include <TMultiGraph.h>
+#include <TRandom3.h>
 
 #include <gsl/gsl_sf_bessel.h>
 #include <gsl/gsl_sf_coulomb.h>
@@ -90,6 +91,7 @@ private:
     std::vector<std::vector<double>> V0;  // depths (MeV)
     std::vector<std::vector<double>> a_errs; // errors in radii
     std::vector<std::vector<double>> V_errs; // errors in depths (MeV)
+    std::vector<TMatrixD> covariance;
 
     
     // Phase shifts: delta[channel][q_index]
@@ -206,6 +208,10 @@ void pHe3SquareWell::InitializeParameters() {
     V0[3] = {31.0429, -4.76129};
     a_errs[3].resize(2);
     V_errs[3].resize(2);
+
+    covariance.resize(n_channels);
+    for (int ch = 0; ch < n_channels; ++ch)
+        covariance[ch].ResizeTo(4, 4);
 }
 
 // Complex gamma function
@@ -402,6 +408,7 @@ void pHe3SquareWell::FCN(int& /*npar*/, double* /*grad*/, double& fval,
         double diff = calc - sw->m_delta_exp[ch][i];
         double err  = sw->m_delta_exp_error[ch][i];
         fval += (err > 0) ? (diff * diff) / (err * err) : diff * diff;
+        /// fval += diff * diff;
     }
 }
 
@@ -448,6 +455,15 @@ void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int /*debug
         }
     }
 
+    // Retrieve covariance matrix
+    Double_t cov[4][4] = {};
+    minuit.mnemat(&cov[0][0], 4);
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            covariance[channel](i, j) = cov[i][j];
+        }
+    }
+
     // Print result
     double fmin, fedm, errdef;
     int    nvpar, nparx, istat;
@@ -456,6 +472,14 @@ void pHe3SquareWell::FitToPhaseShifts(int channel, int n_iterations, int /*debug
               << "  (status " << istat << ")\n";
     std::cout << "  a = {" << a[channel][0] << ", " << a[channel][1] << "} fm\n";
     std::cout << "  V = {" << V0[channel][0] << ", " << V0[channel][1] << "} MeV\n";
+    std::cout << "Covariance matrix for channel " << channel << ":\n";
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            std::cout << covariance[channel](i, j);
+            if (j < 3) std::cout << "  ";
+        }
+        std::cout << '\n';
+    }
 
     Initialize();
 }
