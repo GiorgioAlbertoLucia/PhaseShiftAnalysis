@@ -49,8 +49,14 @@ namespace DefaultConfigs {
         //config.sourceSizes = {6.12, 6.12 - 0.10, 6.12 + 0.11,
         //                     4.90, 4.90 - 0.05, 4.90 + 0.04,};
         // Values from Mrowczysnki
-        config.sourceSizes = {5.34, 5.34 - 0.11, 5.34 + 0.10,
-                             4.24, 4.24 - 0.06, 4.24 + 0.06,};
+        //config.sourceSizes = {5.34, 5.34 - 0.11, 5.34 + 0.10,
+        //                     4.24, 4.24 - 0.06, 4.24 + 0.06,};
+        // Values from fit (free radius)
+        //config.sourceSizes = {6.93, 6.93 - 0.88, 6.93 + 0.88,
+        //                     6.35, 6.35 - 0.72, 6.35 + 0.72,};
+        // Values from fit (free radius, with 26 data)
+        config.sourceSizes = {6.62, 6.62 - 0.79, 6.62 + 0.79,
+                             5.10, 5.10 - 0.54, 5.10 + 0.54,};
         // Source size scan
         //config.sourceSizes = {};
         //for (double r = 3.5; r <= 8.0; r += 0.1) {
@@ -70,14 +76,32 @@ namespace DefaultConfigs {
         // variations are obtained as follows: nominal = n, nominal + err = n + e, nominal - err = n - e
         // a = {n0, n0-e0, n0+e0, n0, n0, n1, n1-e1, n1+e1, n1, n1}
         // r = {n0, n0, n0, n0-e0, n0+e0, n1, n1, n1, n1-e1, n1+e1}
-        // config.realScatteringLengths = {-11.26, -11.30, -11.22, -11.26, -11.26, -9.06, -9.10, -9.14, -9.06, -9.06}; // fm
-        // config.imagScatteringLengths = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // fm
-        // config.effectiveRanges = {1.65, 1.65, 1.65, 1.36, 1.94, 1.36, 1.36, 1.36, 1.11, 1.61};   // fm
-        
+        //config.realScatteringLengths = {-11.26, -11.30, -11.22, -11.26, -11.26, -9.06, -9.10, -9.02, -9.06, -9.06}; // fm
+        //config.imagScatteringLengths = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // fm
+        //config.effectiveRanges = {1.65, 1.65, 1.65, 1.36, 1.94, 1.36, 1.36, 1.36, 1.11, 1.61};   // fm
+
+        // all combinations of {n, n-e, n+e} for a and r, separately for each spin state (nominal first)
+        const std::vector<std::vector<double>> aReVariations = {{-11.26, -11.30, -11.22},  // 1S0, fm
+                                                                {-9.06, -9.10, -9.02}};    // 3S1, fm
+        const std::vector<std::vector<double>> rVariations = {{1.65, 1.36, 1.94},          // 1S0, fm
+                                                              {1.36, 1.11, 1.61}};         // 3S1, fm
+        config.realScatteringLengths = {};
+        config.imagScatteringLengths = {};
+        config.effectiveRanges = {};
+        for (size_t istate = 0; istate < aReVariations.size(); istate++) {
+            for (double aRe : aReVariations[istate]) {
+                for (double r : rVariations[istate]) {
+                    config.realScatteringLengths.push_back(aRe);
+                    config.imagScatteringLengths.push_back(0.0);
+                    config.effectiveRanges.push_back(r);
+                }
+            }
+        }
+
         // without variations
-        config.realScatteringLengths = {-11.26, -9.06}; // fm
-        config.imagScatteringLengths = {0.0, 0.0}; // fm
-        config.effectiveRanges = {1.65, 1.36};   // fm
+        //config.realScatteringLengths = {-11.26, -9.06}; // fm
+        //config.imagScatteringLengths = {0.0, 0.0}; // fm
+        //config.effectiveRanges = {1.65, 1.36};   // fm
         
         // Output settings
         config.outputFolder = "/home/galucia/PhaseShiftAnalysis/numerical_lednicky/pHe/dat/";

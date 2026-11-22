@@ -1,4 +1,5 @@
 import numpy as np
+from itertools import product
 
 from ROOT import TCanvas, TFile, TH1D
 
@@ -63,28 +64,39 @@ if __name__ == "__main__":
 
     set_alice_global_style()
 
-    infile_path = '/home/galucia/PhaseShiftAnalysis/numerical_lednicky/pHe/output/pHe3_LL_radius_span.root'
-    outfile = TFile('/home/galucia/PhaseShiftAnalysis/numerical_lednicky/pHe/output/pHe3_LL_radius_span_GeV.root', 'RECREATE')
+    infile_path = '/home/galucia/PhaseShiftAnalysis/numerical_lednicky/pHe/output/pHe3_LL_radius_fit_with26.root'
+    outfile = TFile('/home/galucia/PhaseShiftAnalysis/numerical_lednicky/pHe/output/pHe3_LL_radius_fit_with26_GeV.root', 'RECREATE')
     
+    # Radii from parameterisation (mT scaling)
     ### radii = [4.33, 4.26, 4.41,
     ###          3.46, 3.43, 3.49] # fm --> Rs / sqrt(2)
+    # Radii from Mrowczynski 
+    ### radii = [5.34, 5.34 - 0.11, 5.34 + 0.10,
+    ###          4.24, 4.24 - 0.06, 4.24 + 0.06] # fm --> Rs / sqrt(2)
+    # Radii from fit (free radius)
+    ### radii = [6.93, 6.93 - 0.88, 6.93 + 0.88,
+    ###          6.35, 6.35 - 0.72, 6.35 + 0.72] # fm --> Rs / sqrt(2)
+    # Radii from fit (free radius with 26 data)
+    radii = [6.62, 6.62 - 0.79, 6.62 + 0.79,
+             5.10, 5.10 - 0.54, 5.10 + 0.54] # fm --> Rs / sqrt(2)
+    # Scan over a range of radii
+    ### radii = np.arange(3.5, 8.1, 0.1) # fm --> Rs / sqrt(2)
     
-    radii = np.arange(3.5, 8.1, 0.1) # fm --> Rs / sqrt(2)
     radii = radii/np.sqrt(2)  # Convert to Rs
     radii_str = [f'{radius:.2f}' for radius in radii]
     print(f'{radii_str=}')
 
     for radius in radii:
-        aRe_dict = {'1s0': [-11.26, #-11.30, -11.22, -11.26, -11.26
-                            ], #fm
-                    '3s1': [-9.06, #-9.10, -9.14, -9.06, -9.06
-                            ] # fm
-                    }
-        r_dict = {'1s0': [1.65, #1.65, 1.65, 1.36, 1.94
-                          ], # fm
-                '3s1': [1.36, #1.36, 1.36, 1.11, 1.61
-                        ] # fm
-                  }
+        # {n, n-e, n+e} variations; all (aRe, r) combinations are used (nominal first)
+        aRe_variations = {'1s0': [-11.26, -11.30, -11.22], # fm
+                          '3s1': [-9.06, -9.10, -9.02]     # fm
+                          }
+        r_variations = {'1s0': [1.65, 1.36, 1.94], # fm
+                        '3s1': [1.36, 1.11, 1.61]  # fm
+                        }
+        combinations = {state: list(product(aRe_variations[state], r_variations[state])) for state in aRe_variations}
+        aRe_dict = {state: [aRe for aRe, _ in combs] for state, combs in combinations.items()}
+        r_dict = {state: [r for _, r in combs] for state, combs in combinations.items()}
         graphs = {}
         hists = {}
         hists_GeV = {}
