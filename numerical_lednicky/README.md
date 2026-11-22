@@ -262,6 +262,40 @@ python3 delta_for_system.py --system d --pion-charge +1 --proton ... --neutron .
     [--proton-ref ... --neutron-ref ... | --decay] --sigma-q 60 --output out.root
 ```
 
+### Combining the interaction and the Δ terms
+
+`macros/combine_cf_delta.py` adds the Δ terms to the Coulomb + s-wave correlation function for fixed strengths:
+
+```
+C(k*) = C_FSI(k*) + λ_sca · ΔC_sca(k*) + λ_dec · ΔC_dec(k*)
+```
+
+```bash
+python3 macros/combine_cf_delta.py <cf_file> <delta_file> <out_file> <lambda_sca> <lambda_dec>
+
+# example: pi- d
+python3 macros/combine_cf_delta.py ../pid/output/piminus_d.root \
+    ../pid/output/piminus_d_Delta_rsca1.00_rdec0.20_sq60.root \
+    ../pid/output/piminus_d_withDelta.root 1.0 1.0
+```
+
+| Argument | Meaning |
+|---|---|
+| `cf_file` | Main ROOT file of the run (`--output-root`) |
+| `delta_file` | Δ file of the same run (`--resonance` or `--mode delta`) |
+| `out_file` | Output ROOT file (overwritten) |
+| `lambda_sca` | Strength of the Δ scattering term (`gDeltaSca_R<R>`) |
+| `lambda_dec` | Strength of the Δ decay term (`gDeltaDec`) |
+
+- **Pairing:** each CF graph `g<R>_aRe<…>_aIm<…>_r<d0>` is paired with `gDeltaSca_R<R>` of the same source size R. The single `gDeltaDec` is added to all of them.
+- **Missing radii:** CF graphs without a matching Δ graph are skipped. This happens, for example, if the two files come from runs with different radius lists.
+- **Output names:** `g<R>_aRe<…>_aIm<…>_r<d0>_withDelta_ls<λ_sca>_ld<λ_dec>`.
+- **Momentum grid:** the Δ curves are evaluated at the k* points of the CF graph (`TGraph::Eval`), so the two files don't need identical grids.
+
+The Δ curves are shapes with an arbitrary scale, so λ = 1 has no special meaning: take the λ's from your fit. To fit, use the three graphs separately with free λ's. Use this macro for plots, or for templates at the fitted values.
+
+Use the CF and Δ files from the same run. Both depend on the source-radius convention, i.e. whether the √2 conversion in `PionNucleusSourceScan()` is on or off.
+
 ---
 
 ## Adding a new system
