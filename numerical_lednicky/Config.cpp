@@ -159,6 +159,9 @@ namespace DefaultConfigs {
 
     CalculationConfig GetPiDConfig(double pionCharge) {
         CalculationConfig config = PionNucleusBase(pionCharge, kDeuteronMass, 1.0, "D");
+        config.delta.massNumber = 2;   // Delta(1232) term, enabled with --resonance
+        config.delta.protonNumber = 1;
+        config.delta.sigmaQ = 60.0;    // MeV/c, illustrative internal momentum
 
         // [0] Coulomb only (ALICE treats pi+ d this way, PRC 112 (2025) 064003)
         // [1] PSI pionic deuterium, Strauch et al. EPJA 47 (2011) 88:
@@ -202,6 +205,9 @@ namespace DefaultConfigs {
 
     CalculationConfig GetPiTConfig(double pionCharge) {
         CalculationConfig config = PionNucleusBase(pionCharge, kTritonMass, 1.0, "T");
+        config.delta.massNumber = 3;   // Delta(1232) term, enabled with --resonance
+        config.delta.protonNumber = 1;
+        config.delta.sigmaQ = 90.0;    // MeV/c, illustrative internal momentum
 
         // No measurement exists. Theory: arXiv:2606.23331, Table 9.1 (10^-3 m_pi^-1):
         //   pi- 3H = -127.4(55) -> -0.1801(78) fm   (charge mirror of pi+ 3He)
@@ -219,6 +225,9 @@ namespace DefaultConfigs {
 
     CalculationConfig GetPiHe3Config(double pionCharge) {
         CalculationConfig config = PionNucleusBase(pionCharge, kHelion3Mass, 2.0, "He3");
+        config.delta.massNumber = 3;   // Delta(1232) term, enabled with --resonance
+        config.delta.protonNumber = 2;
+        config.delta.sigmaQ = 90.0;    // MeV/c, illustrative internal momentum
 
         // Theory: arXiv:2606.23331, Table 9.1 (10^-3 m_pi^-1):
         //   pi- 3He =   64.9(55) -> +0.0918(78) fm

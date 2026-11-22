@@ -1,5 +1,6 @@
 #include "Config.h"
 #include "CorrelationCalculator.h"
+#include "DeltaFeedDown.h"
 
 #include "acb.h"
 #include "acb_hypgeom.h"
@@ -16,7 +17,7 @@
 void PrintUsage(const char* programName) {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "\nOptions:" << std::endl;
-    std::cout << "  --mode <generate|root|both>    Operation mode (default: both)" << std::endl;
+    std::cout << "  --mode <generate|root|both|delta>  Operation mode (default: both; delta = Delta(1232) term only)" << std::endl;
     std::cout << "  --output-folder <path>         Output folder for data files" << std::endl;
     std::cout << "  --output-root <filename>       Output ROOT file name" << std::endl;
     std::cout << "  --particle1-mass <value>       Mass of particle 1 (MeV)" << std::endl;
@@ -28,9 +29,14 @@ void PrintUsage(const char* programName) {
     std::cout << "  --nucleon-charge <1|0>         Nucleon for PiN: 1 = proton, 0 = neutron (default: 1)" << std::endl;
     std::cout << "  --res-decay-only               Resonance-decay term only (|scattered wave|^2)" << std::endl;
     std::cout << "  --pion-charge <+1|-1>          Pion charge for PiD/PiT/PiHe3 (default: -1)" << std::endl;
-    std::cout << "  --resonance                    Add the resonant P wave defined in the config" << std::endl;
-    std::cout << "  --res-elasticity <x>           Override Gamma_el/Gamma_tot of the resonance" << std::endl;
-    std::cout << "  --res-regulator <fm>           Override the small-r regulator radius" << std::endl;
+    std::cout << "  --resonance                    PiN: add the Delta P33 wave to the pair." << std::endl;
+    std::cout << "                                 PiD/PiT/PiHe3: also write the Delta(1232) term (<root>_Delta_*.root)" << std::endl;
+    std::cout << "  --res-elasticity <x>           PiN: override Gamma_el/Gamma_tot (isospin weight) of the resonance" << std::endl;
+    std::cout << "  --res-regulator <fm>           Small-r regulator of the resonant wave (scattering term)" << std::endl;
+    std::cout << "  --res-decay-regulator <fm>     PiD/PiT/PiHe3: small-r regulator of the decay term (default 0.2)" << std::endl;
+    std::cout << "  --delta-decay-radius <fm>      PiD/PiT/PiHe3: Gaussian R of the decay term (default 0.42)" << std::endl;
+    std::cout << "  --sigma-q <MeV/c>              PiD/PiT/PiHe3: internal nucleon momentum per component" << std::endl;
+    std::cout << "  --w-proton <w>, --w-neutron <w>  PiD/PiT/PiHe3: override the p/n channel weights" << std::endl;
     std::cout << "  --help                         Show this help message" << std::endl;
     std::cout << "\nExample:" << std::endl;
     std::cout << "  " << programName << " --mode both --output-folder ./output/" << std::endl;
@@ -69,7 +75,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::string mode = "both"; // generate, root, or both
+    std::string mode = "both"; // generate, root, both, or delta
+    const bool piNucleus = config.delta.massNumber > 0;
+    bool wantResonance = false;
+    double regulator = -1.0;
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -95,13 +104,23 @@ int main(int argc, char* argv[]) {
         } else if ((arg == "--system" || arg == "--pion-charge" || arg == "--nucleon-charge") && i + 1 < argc) {
             ++i; // already handled above
         } else if (arg == "--resonance") {
-            config.resonance.enabled = true;
+            wantResonance = true;
         } else if (arg == "--res-elasticity" && i + 1 < argc) {
             config.resonance.elasticity = atof(argv[++i]);
         } else if (arg == "--res-decay-only") {
             config.resonance.decayOnly = true;
         } else if (arg == "--res-regulator" && i + 1 < argc) {
-            config.resonance.regulatorRadius = atof(argv[++i]);
+            regulator = atof(argv[++i]);
+        } else if (arg == "--res-decay-regulator" && i + 1 < argc) {
+            config.delta.decayRegulator = atof(argv[++i]);
+        } else if (arg == "--delta-decay-radius" && i + 1 < argc) {
+            config.delta.decaySourceSize = atof(argv[++i]);
+        } else if (arg == "--sigma-q" && i + 1 < argc) {
+            config.delta.sigmaQ = atof(argv[++i]);
+        } else if (arg == "--w-proton" && i + 1 < argc) {
+            config.delta.weightProton = atof(argv[++i]);
+        } else if (arg == "--w-neutron" && i + 1 < argc) {
+            config.delta.weightNeutron = atof(argv[++i]);
         } else if (arg == "--dat") {
             config.useDatFiles = true;
         }
@@ -112,6 +131,21 @@ int main(int argc, char* argv[]) {
         }
     }
     
+    if (piNucleus) {
+        // pi-nucleus: the Delta is a pi-N resonance -> separate Delta(1232) term, the pi-A wave is unchanged
+        config.delta.enabled = wantResonance || mode == "delta";
+        if (regulator > 0.0) config.delta.scatteringRegulator = regulator;
+        if (config.resonance.decayOnly)
+            std::cout << "Note: --res-decay-only is for PiN; the Delta file always contains both terms" << std::endl;
+    } else {
+        config.resonance.enabled = wantResonance;
+        if (regulator > 0.0) config.resonance.regulatorRadius = regulator;
+        if (mode == "delta") {
+            std::cerr << "--mode delta is only available for PiD, PiT and PiHe3" << std::endl;
+            return 1;
+        }
+    }
+
     if (config.resonance.enabled) {
         if (config.resonance.mass <= 0.0) {
             std::cerr << "--resonance: no resonance defined for this system" << std::endl;
@@ -156,6 +190,12 @@ int main(int argc, char* argv[]) {
         if (mode == "root" || mode == "both") {
             std::cout << "\nGenerating ROOT file..." << std::endl;
             calculator.GenerateRootFile();
+        }
+
+        if (config.delta.enabled) {
+            std::cout << "\nGenerating Delta(1232) term..." << std::endl;
+            DeltaFeedDown delta(config);
+            delta.GenerateRootFile();
         }
         
         std::cout << "\n======================================" << std::endl;

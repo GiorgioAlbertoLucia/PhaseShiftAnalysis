@@ -36,6 +36,26 @@ struct ResonanceConfig {
     bool decayOnly = false;       // keep only |scattered wave|^2 (resonance-decay term, no Coulomb/plane wave)
 };
 
+// Delta(1232) contribution to pi-nucleus correlations (Delta -> pi N, N coalesces into the nucleus).
+// Computed from pi-p and pi-n P33 waves, mapped onto k*_piA and weighted (see DeltaFeedDown.h).
+struct DeltaFeedDownConfig {
+    bool enabled = false;
+    int massNumber = 0;                // A of the nucleus (0 = not a pi-nucleus system)
+    int protonNumber = 0;              // Z of the nucleus
+    double mass = 1230.55;             // MeV, Breit-Wigner mass
+    double width = 112.2;              // MeV, Breit-Wigner width
+    double barrierRadius = 1.0;        // fm, Blatt-Weisskopf radius
+    double scatteringRegulator = 1.0;  // fm, small-r regulator for the scattering term
+    double decayRegulator = 0.2;       // fm, small-r regulator for the decay term
+    double decaySourceSize = 0.42;     // fm, Gaussian R (exp(-r^2/4R^2)) of the decay term
+    double sigmaQ = 0.0;               // MeV/c per component, internal nucleon momentum
+    int nSamplesQ = 2000;              // Monte Carlo samples for the q smearing
+    double weightProton = -1.0;        // < 0: default weights
+    double weightNeutron = -1.0;
+    double kMaxPiN = 700.0;            // MeV/c, pi-N grid used before mapping
+    double kStepPiN = 1.0;             // MeV/c
+};
+
 // Calculation parameters
 struct CalculationConfig {
     // Momentum grid
@@ -61,6 +81,9 @@ struct CalculationConfig {
     
     // Optional resonance (off by default)
     ResonanceConfig resonance;
+
+    // Optional Delta(1232) contribution for pi-nucleus systems (off by default)
+    DeltaFeedDownConfig delta;
 
     // Particle properties
     ParticleProperties particle1;

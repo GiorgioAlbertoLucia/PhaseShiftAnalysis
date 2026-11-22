@@ -86,6 +86,7 @@ set(SOURCES
     Config.cpp
     CoulombWaveFunction.cpp
     CorrelationCalculator.cpp
+    DeltaFeedDown.cpp
     main.cpp
 )
 
