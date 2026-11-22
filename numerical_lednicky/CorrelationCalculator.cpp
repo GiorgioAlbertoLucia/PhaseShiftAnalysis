@@ -33,6 +33,7 @@ namespace {
 CorrelationCalculator::CorrelationCalculator(const CalculationConfig& config)
     : config_(config), 
       waveFunction_(config.GetChargeRadius()) {
+    waveFunction_.SetResonance(config.resonance, config.particle1.mass, config.particle2.mass);
 }
 CorrelationCalculator::~CorrelationCalculator() {
     for (auto& [key, hist] : dataHists_) {
@@ -46,7 +47,7 @@ TH2D* CorrelationCalculator::GetOrCreateHist(double aRe, double aIm, double r) {
     if (it != dataHists_.end()) return it->second;
 
     int nk = config_.GetNumKBins(), nr = config_.GetNumRBins();
-    TH2D* h = new TH2D(Form("hCky_aRe%.2f_aIm%.2f_r%.2f", aRe, aIm, r), "",
+    TH2D* h = new TH2D(Form("hCky_aRe%.4f_aIm%.4f_r%.2f", aRe, aIm, r), "",
                         nk, config_.kMin, config_.kMin + nk * config_.kBinWidth,
                         nr, config_.rMin, config_.rMin + nr * config_.rBinWidth);
     h->SetDirectory(0); // detach from any open TFile so we control writing explicitly
@@ -74,7 +75,7 @@ void CorrelationCalculator::LoadIntermediateHistograms() {
         double aIm = config_.imagScatteringLengths[i];
         double r = config_.effectiveRanges.empty() ? 0. : config_.effectiveRanges[i];
 
-        TH2D* h = (TH2D*)fin.Get(Form("hCky_aRe%.2f_aIm%.2f_r%.2f", aRe, aIm, r));
+        TH2D* h = (TH2D*)fin.Get(Form("hCky_aRe%.4f_aIm%.4f_r%.2f", aRe, aIm, r));
         if (h) { h->SetDirectory(0); dataHists_[{aRe, aIm, r}] = h; }
     }
     fin.Close();
@@ -162,8 +163,8 @@ std::string CorrelationCalculator::GetDataFileName(double kValue, double aRe, do
     std::stringstream ss;
     ss << config_.outputFolder << "Cky_k" 
        << std::fixed << std::setprecision(0) << kValue 
-       << "_aRe" << std::setprecision(1) << aRe 
-       << "_aIm" << std::setprecision(1) << aIm 
+       << "_aRe" << std::setprecision(4) << aRe 
+       << "_aIm" << std::setprecision(4) << aIm 
        << "_r" << std::setprecision(1) << r 
        << ".dat";
     return ss.str();
@@ -176,9 +177,9 @@ TGraph* CorrelationCalculator::CalculateCorrelationFunction(
     const double h = 0.2;     // Step size
 
     char nameBuf[128], titleBuf[256];
-    snprintf(nameBuf, sizeof(nameBuf), "g%.2f_aRe%.2f_aIm%.2f_r%.2f", sourceSize, aRe, aIm, r);
+    snprintf(nameBuf, sizeof(nameBuf), "g%.2f_aRe%.4f_aIm%.4f_r%.2f", sourceSize, aRe, aIm, r);
     snprintf(titleBuf, sizeof(titleBuf),
-             "Correlation Function (R=%.2f fm, aRe=%.2f fm, aIm=%.2f fm, r=%.2f fm);#it{k} (MeV/#it{c});C(#it{k})",
+             "Correlation Function (R=%.2f fm, aRe=%.4f fm, aIm=%.4f fm, r=%.2f fm);#it{k} (MeV/#it{c});C(#it{k})",
              sourceSize, aRe, aIm, r);
 
     TGraph* graph = new TGraph();

@@ -9,6 +9,12 @@ class CoulombWaveFunction {
 public:
     CoulombWaveFunction(double chargeRadius) : chargeRadius_(chargeRadius) {};
 
+    // Enable a resonant partial wave (masses in MeV, needed for sqrt(s))
+    void SetResonance(const ResonanceConfig& res, double mass1, double mass2);
+
+    // Angle-integrated change of |psi|^2 r^2 due to the resonant wave (same units as GetIntegrand integrated over t)
+    double ResonanceTerm(double k, double r, double eta) const;
+
     struct EtaContext {
         double eta;
         double sqrtAc;
@@ -41,6 +47,8 @@ public:
 
 private:
     double chargeRadius_;
+    ResonanceConfig resonance_;
+    double mass1_ = 0.0, mass2_ = 0.0;
     
     // Helper functions
     double CalculateAc(double eta) const;

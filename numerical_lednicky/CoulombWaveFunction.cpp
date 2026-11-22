@@ -4,6 +4,7 @@
 
 #include "gsl/gsl_sf_coulomb.h"
 #include "gsl/gsl_sf_gamma.h"
+#include "gsl/gsl_errno.h"
 
 #include "acb.h"
 #include "acb_hypgeom.h"
@@ -19,6 +20,7 @@
 using namespace std;
 
 double CoulombWaveFunction::CalculateAc(double eta) const {
+    if (eta == 0.0) return 1.0; // neutral pair (e.g. pi n): no Coulomb
     return 2.0 * PhysicalConstants::PI * eta / (exp(2.0 * PhysicalConstants::PI * eta) - 1.0);
 }
 
@@ -43,8 +45,9 @@ complex<double> CoulombWaveFunction::CalculateScatteringAmplitude(
     double ac = chargeRadius_ * PhysicalConstants::FM_TO_NU;
     d0 = d0 * PhysicalConstants::FM_TO_NU;
     
+    const double coulombTerm = std::isfinite(ac) ? 2.0 / ac * CalculateH(eta) : 0.0; // 0 for neutral pairs
     return 1.0 / (1.0 / f0 + 0.5 * d0 * k * k - 
-                  2.0 / ac * CalculateH(eta) - 
+                  coulombTerm - 
                   i * k * CalculateAc(eta));
 }
 
@@ -113,7 +116,9 @@ CoulombWaveFunction::EtaContext CoulombWaveFunction::PrecomputeEtaContext(
 
     complex<double> f0 = scatteringLength * PhysicalConstants::FM_TO_NU;
     double d0 = effectiveRange * PhysicalConstants::FM_TO_NU;
-    ctx.fc = CalculateScatteringAmplitude(k, f0, d0, ctx.eta);
+    // f0 = 0 means no strong interaction (1/f0 would give NaN with std::complex)
+    ctx.fc = (f0 == 0.0) ? complex<double>(0.0, 0.0)
+                         : CalculateScatteringAmplitude(k, f0, d0, ctx.eta);
 
     gsl_sf_result lnr, arg;
     gsl_sf_lngamma_complex_e(1.0, ctx.eta, &lnr, &arg);
@@ -168,8 +173,62 @@ double CoulombWaveFunction::ThreadSafeSimpsonWiki(const std::function<double(dou
 
 double CoulombWaveFunction::CalculateDCky(double k, double r, const EtaContext& ctx,
                                           unsigned int integrationSteps) const {
+    if (resonance_.enabled && resonance_.decayOnly) return ResonanceTerm(k, r, ctx.eta);
     auto integrand = [&](double t) { return GetIntegrand(k, t, r, ctx); };
-    return CoulombWaveFunction::ThreadSafeSimpsonWiki(integrand, -1.0, 1.0, integrationSteps);
+    double value = CoulombWaveFunction::ThreadSafeSimpsonWiki(integrand, -1.0, 1.0, integrationSteps);
+    if (resonance_.enabled) value += ResonanceTerm(k, r, ctx.eta);
+    return value;
+}
+
+void CoulombWaveFunction::SetResonance(const ResonanceConfig& res, double mass1, double mass2) {
+    resonance_ = res;
+    mass1_ = mass1;
+    mass2_ = mass2;
+    if (resonance_.enabled) gsl_set_error_handler_off(); // check GSL status codes ourselves
+}
+
+double CoulombWaveFunction::ResonanceTerm(double k, double r, double eta) const {
+    const complex<double> i(0, 1);
+    const int L = resonance_.L;
+    const double rho = k * r * PhysicalConstants::FM_TO_NU;
+    if (rho <= 0.0) return 0.0;
+
+    // Regular / irregular Coulomb functions F_L, G_L
+    gsl_sf_result F, Fp, G, Gp;
+    double expF = 0.0, expG = 0.0;
+    int status = gsl_sf_coulomb_wave_FG_e(eta, rho, double(L), 0, &F, &Fp, &G, &Gp, &expF, &expG);
+    if (status != GSL_SUCCESS && status != GSL_EOVRFLW) return 0.0;
+    double FL = F.val * exp(expF);
+    double GL = G.val * exp(expG);
+    // Asymptotic form is not valid inside the interaction region: regulate G_L at small r
+    GL *= pow(1.0 - exp(-r / resonance_.regulatorRadius), 2 * L + 1);
+
+    // Breit-Wigner with energy-dependent width, Gamma(k) ~ k^(2L+1) with Blatt-Weisskopf barrier (L = 1 form)
+    auto barrier = [&](double q) {
+        double z = pow(q * resonance_.barrierRadius * PhysicalConstants::FM_TO_NU, 2);
+        return (L == 0) ? 1.0 : z / (1.0 + z);
+    };
+    auto momentumAt = [&](double sqrtS) {
+        double s = sqrtS * sqrtS;
+        double a = s - pow(mass1_ + mass2_, 2), b = s - pow(mass1_ - mass2_, 2);
+        return (a > 0) ? sqrt(a * b) / (2.0 * sqrtS) : 0.0;
+    };
+    const double kR = momentumAt(resonance_.mass);
+    const double sqrtS = sqrt(mass1_ * mass1_ + k * k) + sqrt(mass2_ * mass2_ + k * k);
+    double gammaK = resonance_.width;
+    if (kR > 0.0) gammaK *= (k / kR) * barrier(k) / barrier(kR);
+
+    complex<double> T = resonance_.elasticity * 0.5 * gammaK /
+                        (resonance_.mass - sqrtS - 0.5 * i * gammaK);
+
+    complex<double> scattered = T * (GL + i * FL);
+    double delta = resonance_.decayOnly ? norm(scattered) / (rho * rho)
+                                        : (norm(FL + scattered) - FL * FL) / (rho * rho);
+
+    // Same normalisation as integrating GetIntegrand over t in [-1, 1]:
+    // 2 pi * int dt |psi|^2 r^2 -> 4 pi r^2 sum_L (2L+1) |psi_L|^2 / rho^2
+    return 4.0 * PhysicalConstants::PI * r * r * pow(PhysicalConstants::FM_TO_NU, 3) *
+           (2 * L + 1) * resonance_.spinWeight * delta;
 }
 
 double CoulombWaveFunction::CalculateDCky(double k, double r,

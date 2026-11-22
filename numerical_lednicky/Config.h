@@ -20,6 +20,22 @@ struct ParticleProperties {
     ParticleProperties(double m = 0.0, double q = 0.0) : mass(m), charge(q) {}
 };
 
+// Optional resonant partial wave (L >= 1), added on top of the s-wave Lednicky term.
+// The resonant wave replaces the Coulomb partial wave F_L outside the interaction region:
+//   psi_L = F_L + T(k) * (G_L + i F_L),   T = x * (Gamma(k)/2) / (M - sqrt(s) - i Gamma(k)/2)
+// so the interference with the incident (Coulomb) wave is included, as in arXiv:2607.04351.
+struct ResonanceConfig {
+    bool enabled = false;
+    int L = 1;                    // orbital angular momentum of the resonant wave
+    double mass = 0.0;            // MeV, pole mass
+    double width = 0.0;           // MeV, total width at the pole
+    double elasticity = 1.0;      // x = Gamma_elastic / Gamma_total (x < 1 -> absorption)
+    double spinWeight = 1.0;      // (2J+1) / ((2 s1 + 1)(2 s2 + 1)(2L+1)), fraction of the L wave that resonates
+    double barrierRadius = 1.0;   // fm, Blatt-Weisskopf radius in the energy-dependent width
+    double regulatorRadius = 1.0; // fm, G_L -> G_L * (1 - exp(-r/r_reg))^(2L+1) to tame r -> 0
+    bool decayOnly = false;       // keep only |scattered wave|^2 (resonance-decay term, no Coulomb/plane wave)
+};
+
 // Calculation parameters
 struct CalculationConfig {
     // Momentum grid
@@ -43,6 +59,9 @@ struct CalculationConfig {
     std::vector<double> imagScatteringLengths;
     std::vector<double> effectiveRanges;
     
+    // Optional resonance (off by default)
+    ResonanceConfig resonance;
+
     // Particle properties
     ParticleProperties particle1;
     ParticleProperties particle2;
@@ -67,4 +86,10 @@ namespace DefaultConfigs {
     // Xi-Pi system configuration
     CalculationConfig GetXiPiConfig();
     CalculationConfig GetPHeConfig();
+
+    // Pion-light-nucleus systems; pionCharge = +1 or -1
+    CalculationConfig GetPiDConfig(double pionCharge);
+    CalculationConfig GetPiTConfig(double pionCharge);
+    CalculationConfig GetPiHe3Config(double pionCharge);
+    CalculationConfig GetPiNConfig(double pionCharge, double nucleonCharge); // nucleonCharge 1 = p, 0 = n
 }

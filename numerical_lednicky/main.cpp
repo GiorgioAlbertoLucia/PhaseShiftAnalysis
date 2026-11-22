@@ -8,6 +8,7 @@
 
 #include <TROOT.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -23,6 +24,13 @@ void PrintUsage(const char* programName) {
     std::cout << "  --particle2-mass <value>       Mass of particle 2 (MeV)" << std::endl;
     std::cout << "  --particle2-charge <value>     Charge of particle 2" << std::endl;
     std::cout << "  --dat                          Use .dat files for intermediate storage" << std::endl;
+    std::cout << "  --system <XiPi|PHe|PiD|PiT|PiHe3|PiN>  Built-in configuration (default: PHe)" << std::endl;
+    std::cout << "  --nucleon-charge <1|0>         Nucleon for PiN: 1 = proton, 0 = neutron (default: 1)" << std::endl;
+    std::cout << "  --res-decay-only               Resonance-decay term only (|scattered wave|^2)" << std::endl;
+    std::cout << "  --pion-charge <+1|-1>          Pion charge for PiD/PiT/PiHe3 (default: -1)" << std::endl;
+    std::cout << "  --resonance                    Add the resonant P wave defined in the config" << std::endl;
+    std::cout << "  --res-elasticity <x>           Override Gamma_el/Gamma_tot of the resonance" << std::endl;
+    std::cout << "  --res-regulator <fm>           Override the small-r regulator radius" << std::endl;
     std::cout << "  --help                         Show this help message" << std::endl;
     std::cout << "\nExample:" << std::endl;
     std::cout << "  " << programName << " --mode both --output-folder ./output/" << std::endl;
@@ -37,7 +45,29 @@ int main(int argc, char* argv[]) {
     std::cout << "======================================" << std::endl;
     
     //CalculationConfig config = DefaultConfigs::GetXiPiConfig();
-    CalculationConfig config = DefaultConfigs::GetPHeConfig();
+    // Pick the built-in configuration first, so the other options can override it
+    std::string system = "PHe";
+    double pionCharge = -1.0;
+    double nucleonCharge = 1.0;
+    for (int i = 1; i < argc - 1; i++) {
+        std::string arg = argv[i];
+        if (arg == "--system") system = argv[i + 1];
+        else if (arg == "--pion-charge") pionCharge = atof(argv[i + 1]);
+        else if (arg == "--nucleon-charge") nucleonCharge = atof(argv[i + 1]);
+    }
+
+    CalculationConfig config;
+    if      (system == "XiPi")  config = DefaultConfigs::GetXiPiConfig();
+    else if (system == "PHe")   config = DefaultConfigs::GetPHeConfig();
+    else if (system == "PiD")   config = DefaultConfigs::GetPiDConfig(pionCharge);
+    else if (system == "PiT")   config = DefaultConfigs::GetPiTConfig(pionCharge);
+    else if (system == "PiHe3") config = DefaultConfigs::GetPiHe3Config(pionCharge);
+    else if (system == "PiN")   config = DefaultConfigs::GetPiNConfig(pionCharge, nucleonCharge);
+    else {
+        std::cerr << "Unknown system: " << system << std::endl;
+        PrintUsage(argv[0]);
+        return 1;
+    }
     
     std::string mode = "both"; // generate, root, or both
     
@@ -62,6 +92,16 @@ int main(int argc, char* argv[]) {
             config.particle2.mass = atof(argv[++i]);
         } else if (arg == "--particle2-charge" && i + 1 < argc) {
             config.particle2.charge = atof(argv[++i]);
+        } else if ((arg == "--system" || arg == "--pion-charge" || arg == "--nucleon-charge") && i + 1 < argc) {
+            ++i; // already handled above
+        } else if (arg == "--resonance") {
+            config.resonance.enabled = true;
+        } else if (arg == "--res-elasticity" && i + 1 < argc) {
+            config.resonance.elasticity = atof(argv[++i]);
+        } else if (arg == "--res-decay-only") {
+            config.resonance.decayOnly = true;
+        } else if (arg == "--res-regulator" && i + 1 < argc) {
+            config.resonance.regulatorRadius = atof(argv[++i]);
         } else if (arg == "--dat") {
             config.useDatFiles = true;
         }
@@ -72,6 +112,23 @@ int main(int argc, char* argv[]) {
         }
     }
     
+    if (config.resonance.enabled) {
+        if (config.resonance.mass <= 0.0) {
+            std::cerr << "--resonance: no resonance defined for this system" << std::endl;
+            return 1;
+        }
+        // keep resonance runs separate from the s-wave-only ones
+        char tag[64];
+        snprintf(tag, sizeof(tag), "_%s_x%.2f_rreg%.2f", config.resonance.decayOnly ? "ResDecay" : "Res",
+                 config.resonance.elasticity, config.resonance.regulatorRadius);
+        auto dot = config.outputRootFile.rfind(".root");
+        config.outputRootFile.insert(dot == std::string::npos ? config.outputRootFile.size() : dot, tag);
+        config.intermediateRootFile = std::string("Cky_intermediate") + tag + ".root";
+        std::cout << "  Resonance: M=" << config.resonance.mass << " MeV, Gamma=" << config.resonance.width
+                  << " MeV, L=" << config.resonance.L << ", x=" << config.resonance.elasticity
+                  << ", r_reg=" << config.resonance.regulatorRadius << " fm" << std::endl;
+    }
+
     // Print configuration
     std::cout << "\nConfiguration:" << std::endl;
     std::cout << "  Mode: " << mode << std::endl;
