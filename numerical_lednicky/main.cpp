@@ -11,6 +11,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -19,6 +20,7 @@ void PrintUsage(const char* programName) {
     std::cout << "\nOptions:" << std::endl;
     std::cout << "  --mode <generate|root|both|delta>  Operation mode (default: both; delta = Delta(1232) term only)" << std::endl;
     std::cout << "  --output-folder <path>         Output folder for data files" << std::endl;
+    std::cout << "  --output-root-folder <path>    Folder for the final and Delta ROOT files" << std::endl;
     std::cout << "  --output-root <filename>       Output ROOT file name" << std::endl;
     std::cout << "  --particle1-mass <value>       Mass of particle 1 (MeV)" << std::endl;
     std::cout << "  --particle1-charge <value>     Charge of particle 1" << std::endl;
@@ -91,6 +93,9 @@ int main(int argc, char* argv[]) {
             mode = argv[++i];
         } else if (arg == "--output-folder" && i + 1 < argc) {
             config.outputFolder = argv[++i];
+        } else if (arg == "--output-root-folder" && i + 1 < argc) {
+            config.outputRootFolder = argv[++i];
+            if (config.outputRootFolder.back() != '/') config.outputRootFolder += '/';
         } else if (arg == "--output-root" && i + 1 < argc) {
             config.outputRootFile = argv[++i];
         } else if (arg == "--particle1-mass" && i + 1 < argc) {
@@ -179,6 +184,19 @@ int main(int argc, char* argv[]) {
          << "] fm in steps of " << config.rBinWidth << std::endl;
     std::cout << std::endl;
     
+    // Create the output folders (relative paths are relative to where the program is run)
+    for (const std::string& folder : {config.outputFolder, config.outputRootFolder}) {
+        if (folder.empty()) continue;
+        std::error_code ec;
+        std::filesystem::create_directories(folder, ec);
+        if (ec) {
+            std::cerr << "Error: cannot create output folder " << folder << ": " << ec.message() << std::endl;
+            return 1;
+        }
+    }
+    std::cout << "Output folders: " << std::filesystem::absolute(config.outputFolder).string() << ", "
+              << std::filesystem::absolute(config.outputRootFolder).string() << std::endl;
+
     try {
         CorrelationCalculator calculator(config);
         

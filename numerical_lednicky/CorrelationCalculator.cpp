@@ -43,15 +43,27 @@ CorrelationCalculator::~CorrelationCalculator() {
 
 TH2D* CorrelationCalculator::GetOrCreateHist(double aRe, double aIm, double r) {
     DataKey key{aRe, aIm, r};
-    auto it = dataHists_.find(key);
-    if (it != dataHists_.end()) return it->second;
+    TH2D* existing = nullptr;
+    #pragma omp critical(dataHists)
+    {
+        auto it = dataHists_.find(key);
+        if (it != dataHists_.end()) existing = it->second;
+    }
+    if (existing) return existing;
+
+    // Only reached before the parallel loop (histograms are pre-created), but keep it safe
+    TH1::AddDirectory(kFALSE);
 
     int nk = config_.GetNumKBins(), nr = config_.GetNumRBins();
     TH2D* h = new TH2D(Form("hCky_aRe%.4f_aIm%.4f_r%.2f", aRe, aIm, r), "",
                         nk, config_.kMin, config_.kMin + nk * config_.kBinWidth,
                         nr, config_.rMin, config_.rMin + nr * config_.rBinWidth);
     h->SetDirectory(0); // detach from any open TFile so we control writing explicitly
-    dataHists_[key] = h;
+    #pragma omp critical(dataHists)
+    {
+        auto inserted = dataHists_.emplace(key, h);
+        if (!inserted.second) { delete h; h = inserted.first->second; }
+    }
     return h;
 }
 
@@ -93,6 +105,16 @@ void CorrelationCalculator::GenerateDataFiles() {
     
     //int doneFiles = 0;
     std::atomic<int> doneFiles{0};
+
+    // Create every histogram before the parallel loop: creating them lazily from several threads
+    // raced on dataHists_ (duplicate histograms, "Replacing existing TH1", rows filled into a
+    // histogram that was then dropped).
+    if (!config_.useDatFiles) {
+        for (int i = 0; i < nvalues; i++) {
+            double r = config_.effectiveRanges.empty() ? 0. : config_.effectiveRanges[i];
+            GetOrCreateHist(config_.realScatteringLengths[i], config_.imagScatteringLengths[i], r);
+        }
+    }
 
     #pragma omp parallel for collapse(2) schedule(dynamic)
     for (int kBin = 0; kBin < nkbins; kBin++) {
