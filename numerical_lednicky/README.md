@@ -264,39 +264,50 @@ python3 delta_for_system.py --system d --pion-charge +1 --proton ... --neutron .
 
 ### Combining the interaction and the Δ terms
 
-`macros/combine_cf_delta.py` adds the Δ terms to the Coulomb + s-wave correlation function for fixed strengths:
+`macros/combine_cf_delta.py` adds the Δ terms to the Coulomb + s-wave correlation function:
 
 ```
-C(k*) = C_FSI(k*) + λ_sca · ΔC_sca(k*) + λ_dec · ΔC_dec(k*)
+C(k*) = 1 + λ_FSI · (C_FSI(k*) − 1) + λ_sca · ΔC_sca(k*) + λ_dec · ΔC_dec(k*)
 ```
 
 ```bash
-python3 macros/combine_cf_delta.py <cf_file> <delta_file> <out_file> <lambda_sca> <lambda_dec>
+# one combination
+python3 macros/combine_cf_delta.py --cf ../pid/output/piminus_d.root \
+    --delta ../pid/output/piminus_d_Delta_rsca1.00_rdec0.20_sq60.root \
+    -o ../pid/output/piminus_d_combined.root --lambda-sca 0.5 --lambda-dec 0.5
 
-# example: pi- d
-python3 macros/combine_cf_delta.py ../pid/output/piminus_d.root \
-    ../pid/output/piminus_d_Delta_rsca1.00_rdec0.20_sq60.root \
-    ../pid/output/piminus_d_withDelta.root 1.0 1.0
+# grid of combinations, two radii, nominal scattering length only, also as TH1D
+python3 macros/combine_cf_delta.py --cf piminus_d.root --delta piminus_d_Delta_rsca1.00_rdec0.20_sq60.root \
+    -o grid.root --lambda-sca 0:1:0.25 --lambda-dec 0 0.5 1 --radii 1.2 2.0 --match aRe-0.0353 --hist
+
+# see what the files contain
+python3 macros/combine_cf_delta.py --cf piminus_d.root --delta piminus_d_Delta_rsca1.00_rdec0.20_sq60.root --list
 ```
 
-| Argument | Meaning |
+| Option | Meaning |
 |---|---|
-| `cf_file` | Main ROOT file of the run (`--output-root`) |
-| `delta_file` | Δ file of the same run (`--resonance` or `--mode delta`) |
-| `out_file` | Output ROOT file (overwritten) |
-| `lambda_sca` | Strength of the Δ scattering term (`gDeltaSca_R<R>`) |
-| `lambda_dec` | Strength of the Δ decay term (`gDeltaDec`) |
+| `--cf <file>` | Main ROOT file of the run (`--output-root`) |
+| `--delta <file>` | Δ file of the same run (`--resonance` or `--mode delta`) |
+| `-o, --output <file>` | Output ROOT file (overwritten) |
+| `--lambda-fsi L…` | Strength(s) of C_FSI − 1 (default 1) |
+| `--lambda-sca L…` | Strength(s) of the Δ scattering term (default 1) |
+| `--lambda-dec L…` | Strength(s) of the Δ decay term (default 1) |
+| `--radii R…` | Only these source sizes, as in the graph names |
+| `--match TEXT…` | Only CF graphs whose name contains all the strings, e.g. `aRe-0.0353` |
+| `--hist` | Also write each curve as a TH1D (`h<R>_aRe…`) |
+| `--components` | Also write the input curves to a `components/` directory |
+| `--list` | List the graphs in both files and exit |
 
-- **Pairing:** each CF graph `g<R>_aRe<…>_aIm<…>_r<d0>` is paired with `gDeltaSca_R<R>` of the same source size R. The single `gDeltaDec` is added to all of them.
-- **Missing radii:** CF graphs without a matching Δ graph are skipped. This happens, for example, if the two files come from runs with different radius lists.
-- **Output names:** `g<R>_aRe<…>_aIm<…>_r<d0>_withDelta_ls<λ_sca>_ld<λ_dec>`.
-- **Momentum grid:** the Δ curves are evaluated at the k* points of the CF graph (`TGraph::Eval`), so the two files don't need identical grids.
+λ values are listed (`0 0.5 1`) or given as `start:stop:step` ranges (stop included).
 
-The Δ curves are shapes with an arbitrary scale, so λ = 1 has no special meaning: take the λ's from your fit. To fit, use the three graphs separately with free λ's. Use this macro for plots, or for templates at the fitted values.
+- **Output layout:** every combination of the λ values goes to its own directory, `lfsi<λ_FSI>_lsca<λ_sca>_ldec<λ_dec>/`. Inside it, the curves keep the CF graph names `g<R>_aRe<…>_aIm<…>_r<d0>`.
+- **Pairing:** each CF graph is paired with `gDeltaSca_R<R>` of the same R. The single `gDeltaDec` is added to all of them.
+- **Momentum grid:** the Δ curves are interpolated at the CF k* points.
+- **Errors:** the script stops with a message if the files look swapped or if nothing matches the filters. It warns about CF graphs that have no Δ partner.
 
-Use the CF and Δ files from the same run. Both depend on the source-radius convention, i.e. whether the √2 conversion in `PionNucleusSourceScan()` is on or off.
+The Δ curves are shapes with an arbitrary scale, so λ = 1 has no special meaning. To fit, use the three components with free λ's. Use this macro for plots, for templates at fitted values, or for λ scans. Combine files from the same run only, since both depend on the source-radius convention (the √2 conversion in `PionNucleusSourceScan()`).
 
----
+----------
 
 ## Adding a new system
 
